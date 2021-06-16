@@ -41,7 +41,6 @@ rm(have, want, junk)
 ADEME.data <- read_sheet("https://docs.google.com/spreadsheets/d/1LFHU66VoZtDFF2OI2Wr4-bmw_x1UQHhn9gp_TtnNkWE/edit?usp=sharing") %>%
   mutate_all(as.character)
 
-
 names(ADEME.data)<-gsub("\\.","",names(ADEME.data))
 
 p2 <- ADEME.data %>%
