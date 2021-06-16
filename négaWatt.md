@@ -1,6 +1,32 @@
 The négaWatt scenario
 ================
 
+<details>
+
+<summary>Packages</summary>
+
+<p>
+
+``` r
+# Check if the packages that we need are installed
+want = c("dplyr",
+         "tidyr",
+         "googlesheets4",
+         "ggplot2")
+
+have = want %in% rownames(installed.packages())
+
+# Install the packages that we miss
+if ( any(!have) ) { install.packages( want[!have] ) }
+
+# Load the packages
+junk <- lapply(want, library, character.only = T)
+
+# Remove the objects we
+```
+
+</details>
+
 # Description
 
 Developed by the négaWatt Association, the “négaWatt 2017-2050” scénario
@@ -39,7 +65,55 @@ per cycling trip per person by 393%.
 
 ### Visualization
 
-<img src="négaWatt_files/figure-gfm/unnamed-chunk-2-1.png" style="display: block; margin: auto;" />
+<details>
+
+<summary>Codes</summary>
+
+<p>
+
+``` r
+#négaWatt
+
+negaWatt.data <- read_sheet("https://docs.google.com/spreadsheets/d/1a96mb7exIg634WNtwrflK2xnOZhAb5fU5SOCZShPP0s/edit?usp=sharing")
+
+negaWatt.data <- negaWatt.data %>%
+  na.omit() %>%
+  rename("Type" = "km/hab/an")  %>%
+  mutate(Type = ifelse(Type == "Marche à pied", "Walking",
+                       ifelse(Type == "Vélo", "Total_Cycling", "Share_Ebike" ))) %>%
+  pivot_longer(!Type,
+               names_to = "Year",
+               values_to = "value") %>%
+  pivot_wider(id_cols = Year, 
+              names_from = Type,
+              values_from = value) %>%
+  mutate(Ebike = Total_Cycling * Share_Ebike,
+         Normal_bike = Total_Cycling * (1 - Share_Ebike)) %>%
+  pivot_longer(!Year,
+               names_to = "Type",
+               values_to = "value") %>%
+  filter(Type != "Share_Ebike")
+
+p1 = negaWatt.data %>% 
+ggplot() +  
+  geom_line(aes(x = Year, y = value, group = Type, color = Type), size = 1)+
+  ylab("") +
+  xlab("") +
+  labs(title = "négaWatt scenario", subtitle = "In km/inhab/year") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 16),
+        plot.subtitle = element_text(colour = "#595a5c", size = 12),
+        legend.title = element_blank(),
+        legend.text = element_text( size = 10),
+        legend.position="top",
+        axis.text=element_text(size=10),
+        axis.text.x = element_text(angle = 60, vjust = 0.5, hjust=1))+
+  ylim(0, 1250)
+```
+
+</details>
+
+<img src="négaWatt_files/figure-gfm/unnamed-chunk-3-1.png" style="display: block; margin: auto;" />
 
 # reference
 
