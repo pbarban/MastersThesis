@@ -31,11 +31,11 @@ library(gganimate)
 devtools::install_github("r-rust/gifski")
 ```
 
-    ##          checking for file 'C:\Users\Pierre\AppData\Local\Temp\RtmpqakLBc\remotes7780197e259a\r-rust-gifski-6b86cc6/DESCRIPTION' ...     checking for file 'C:\Users\Pierre\AppData\Local\Temp\RtmpqakLBc\remotes7780197e259a\r-rust-gifski-6b86cc6/DESCRIPTION' ...   v  checking for file 'C:\Users\Pierre\AppData\Local\Temp\RtmpqakLBc\remotes7780197e259a\r-rust-gifski-6b86cc6/DESCRIPTION' (687ms)
+    ##          checking for file 'C:\Users\Pierre\AppData\Local\Temp\Rtmpeivynv\remotes7ef82a4f5d\r-rust-gifski-6b86cc6/DESCRIPTION' ...     checking for file 'C:\Users\Pierre\AppData\Local\Temp\Rtmpeivynv\remotes7ef82a4f5d\r-rust-gifski-6b86cc6/DESCRIPTION' ...   v  checking for file 'C:\Users\Pierre\AppData\Local\Temp\Rtmpeivynv\remotes7ef82a4f5d\r-rust-gifski-6b86cc6/DESCRIPTION' (783ms)
     ##       -  preparing 'gifski':
-    ##    checking DESCRIPTION meta-information ...     checking DESCRIPTION meta-information ...   v  checking DESCRIPTION meta-information
+    ##      checking DESCRIPTION meta-information ...     checking DESCRIPTION meta-information ...   v  checking DESCRIPTION meta-information
     ##   -  cleaning src
-    ##       -  checking for LF line-endings in source and make files and shell scripts (844ms)
+    ##       -  checking for LF line-endings in source and make files and shell scripts (567ms)
     ##       -  checking for empty or unneeded directories
     ##       -  building 'gifski_1.4.3-1.tar.gz'
     ##   Avis :     Avis : file 'gifski/configure' did not have execute permissions: corrected
@@ -73,7 +73,7 @@ unz(temp, "projpop0760_FECbasESPcentMIGcent.xls")
 ```
 
     ## A connection with                                                                                                                        
-    ## description "C:\\Users\\Pierre\\AppData\\Local\\Temp\\RtmpqakLBc\\file7780643e76cc:projpop0760_FECbasESPcentMIGcent.xls"
+    ## description "C:\\Users\\Pierre\\AppData\\Local\\Temp\\Rtmpeivynv\\file7ef8319675d4:projpop0760_FECbasESPcentMIGcent.xls"
     ## class       "unz"                                                                                                       
     ## mode        "r"                                                                                                         
     ## text        "text"                                                                                                      
@@ -155,6 +155,7 @@ PopPyramid <- PopPyramid +
       caption = "\n\nData Source: www.insee.fr/fr/statistiques"
      )
 
+
 PopPyramid <- PopPyramid + 
   transition_states(year,
                     transition_length = 0.25,
@@ -168,7 +169,7 @@ PopPyramid <- PopPyramid +
 
 <img src="Population_Projection_files/figure-gfm/unnamed-chunk-4-1.gif" style="display: block; margin: auto;" />
 
-As shown by the graph above, we undesrtand that the number of older
+As shown by the graph above, we understand that the number of older
 individuals will keep increasing over the years.
 
 # reference
