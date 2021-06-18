@@ -8,17 +8,15 @@ Population Projection
 <p>
 
 ``` r
-want = c("dplyr",
-         "readxl",
-         "ggpol",
-         "devtools",
-         "tidyr",
-           "AMR")
+#Rtools is necessary to run this chunk of codes
+#You can download it here: https://cran.r-project.org/bin/windows/Rtools/
+
+want = c("dplyr","readxl", "ggpol","tidyr","AMR")
 
 have = want %in% rownames(installed.packages())
 
 # Install the packages that we miss
-if ( any(!have) ) { install.packages( want[!have] ) }
+if ( any(!have) ) { install.packages( want[!have]) }
 
 # Load the packages
 junk <- lapply(want, library, character.only = T)
@@ -26,23 +24,45 @@ junk <- lapply(want, library, character.only = T)
 # Remove the objects we created
 rm(have, want, junk)
 
-install_github('thomasp85/gganimate')
+
+devtools::install_github('thomasp85/gganimate')
 library(gganimate)
+
+devtools::install_github("r-rust/gifski")
+```
+
+    ##          checking for file 'C:\Users\Pierre\AppData\Local\Temp\Rtmps3H4Fz\remotes143834941264\r-rust-gifski-6b86cc6/DESCRIPTION' ...     checking for file 'C:\Users\Pierre\AppData\Local\Temp\Rtmps3H4Fz\remotes143834941264\r-rust-gifski-6b86cc6/DESCRIPTION' ...   v  checking for file 'C:\Users\Pierre\AppData\Local\Temp\Rtmps3H4Fz\remotes143834941264\r-rust-gifski-6b86cc6/DESCRIPTION' (683ms)
+    ##       -  preparing 'gifski':
+    ##      checking DESCRIPTION meta-information ...     checking DESCRIPTION meta-information ...   v  checking DESCRIPTION meta-information
+    ##   -  cleaning src
+    ##       -  checking for LF line-endings in source and make files and shell scripts (815ms)
+    ##       -  checking for empty or unneeded directories
+    ##       -  building 'gifski_1.4.3-1.tar.gz'
+    ##   Avis :     Avis : file 'gifski/configure' did not have execute permissions: corrected
+    ##      
+    ## 
+
+``` r
+library(gifski)
 ```
 
 </details>
+
+# Introduction
+
+To quantify the impact on the long term of walking and cycling on
+individuals; we have to understand how the population will evolve by the
+horizon of 2050. To do so, we use the scenario of low fecundity 2007
+produced by the *Institut national de la statistique et des études
+économiques* (INSEE)(**???**). This is the same demographic scenario
+adopted by the negaWatt team. The scenario only covers the mainland of
+France (*France métropolitaine*).
 
 <details>
 
 <summary>Codes</summary>
 
 <p>
-
-# Introduction
-
-Scenario low fecundity 2007 from INSEE
-
-Champ : France métropolitaine
 
 ``` r
 temp <-  tempfile()
@@ -52,13 +72,13 @@ download.file(dataURL, destfile=temp, mode='wb')
 unz(temp, "projpop0760_FECbasESPcentMIGcent.xls")
 ```
 
-    ## A connection with                                                                                                                        
-    ## description "C:\\Users\\Pierre\\AppData\\Local\\Temp\\RtmpADPjbP\\file85ac546c1ebe:projpop0760_FECbasESPcentMIGcent.xls"
-    ## class       "unz"                                                                                                       
-    ## mode        "r"                                                                                                         
-    ## text        "text"                                                                                                      
-    ## opened      "closed"                                                                                                    
-    ## can read    "yes"                                                                                                       
+    ## A connection with                                                                                                                       
+    ## description "C:\\Users\\Pierre\\AppData\\Local\\Temp\\Rtmps3H4Fz\\file14385342c05:projpop0760_FECbasESPcentMIGcent.xls"
+    ## class       "unz"                                                                                                      
+    ## mode        "r"                                                                                                        
+    ## text        "text"                                                                                                     
+    ## opened      "closed"                                                                                                   
+    ## can read    "yes"                                                                                                      
     ## can write   "yes"
 
 ``` r
@@ -146,10 +166,6 @@ PopPyramid <- PopPyramid +
 
 </details>
 
-``` r
-PopPyramid
-```
-
-    ## NULL
+<img src="Population_Projection_files/figure-gfm/unnamed-chunk-4-1.gif" style="display: block; margin: auto;" />
 
 # reference
