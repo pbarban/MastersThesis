@@ -72,6 +72,8 @@ paged_table(Mortality.rate.projection)
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 
 library(stats)
+install.packages("tidyverse")
+library(tidyverse)
 
 Mortality.rate.projection.age = Mortality.rate.projection %>% 
   filter(age_grp != "Total") %>%
@@ -81,7 +83,10 @@ Mortality.rate.projection.age = Mortality.rate.projection %>%
          to = as.numeric(ifelse(nchar(age_grp) == 5,
                            substring(age_grp, 4,5),
                            from)),
-         age = (from+to)/2)
+         age = (from+to)/2) %>%
+  group_by(sexe)  %>%
+ complete(age = seq(min(age), max(age), by = 1))
+
 
 dr <- stats::approx(Mortality.rate.projection.age$age, Mortality.rate.projection.age$Y2016, xout = 0:max(Mortality.rate.projection.age$age))
  
