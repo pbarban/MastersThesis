@@ -1,0 +1,140 @@
+---
+title: "TITLE"
+output:
+  github_document
+bibliography: Bibli.bib
+csl: nature.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.align='center')
+```
+
+<details>
+<summary>Packages</summary>
+<p>
+
+```{r}
+want = c("dplyr",
+         "stringr")
+
+have = want %in% rownames(installed.packages())
+
+# Install the packages that we miss
+if ( any(!have) ) { install.packages( want[!have] ) }
+
+# Load the packages
+junk <- lapply(want, library, character.only = T)
+
+# Remove the objects we created
+rm(have, want, junk)
+
+```
+</details> 
+
+<details>
+<summary>Codess</summary>
+<p>
+
+# Introduction
+
+# Mortality 
+
+## Mortality rate projection
+
+Regional projections of mortality for years 2016-2060.
+
+(Source: [WHO](https://www.who.int/healthinfo/global_burden_disease/projections/en/) )
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+sexe = c( "Male","Male","Male","Male","Male","Male","Female","Female","Female","Female","Female","Female","Male","Female")
+age_grp = c(	"00-04",	"05-14",	"15-29",	"30-49",	"50-69",	"80",		"00-04",	"05-14",	"15-29",	"30-49",	"50-69",	"80","150","150")
+Y2016 = c(0.00205,	0.00020,	0.00103,	0.00315,	0.01368,	0.06716,0.00174,	0.00015,	0.00042,	0.00131,	0.00643,	0.05791,1,1)
+
+Y2030 = c(0.00127,	0.00016,	0.00079,	0.00266,	0.01076,	0.06051,	0.00108,	0.00012,	0.00034,	0.00118,	0.00588,	0.04796,1,1)
+
+Y2045 = c(0.00087,	0.00013,	0.00074,	0.00203,	0.00902,	0.05864,	0.00075,	0.00010,	0.00030,	0.00092,	0.00514,	0.04965,1,1)
+
+Y2060 = c(0.00065,	0.00012,	0.00067,	0.00188,	0.00714,	0.05645,	0.00057,	0.00009,	0.00027,	0.00084,	0.00440,	0.04833,1,1)
+
+Mortality.rate.projection = data.frame(sexe,age_grp,Y2016, Y2030,Y2045,Y2060 )
+
+```
+
+### Mortality rate projection for euro zone
+```{r,echo= FALSE}
+paged_table(Mortality.rate.projection)
+```
+
+
+### Percentage change
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+library(stats)
+
+Mortality.rate.projection.age = Mortality.rate.projection %>% 
+  filter(age_grp != "Total") %>%
+  mutate(from = as.numeric(str_replace(string = age_grp,
+            pattern = "(^\\d+).*",
+            replacement = "\\1")),
+         to = as.numeric(ifelse(nchar(age_grp) == 5,
+                           substring(age_grp, 4,5),
+                           from)),
+         age = (from+to)/2)
+
+dr <- stats::approx(Mortality.rate.projection.age$age, Mortality.rate.projection.age$Y2016, xout = 0:max(Mortality.rate.projection.age$age))
+ 
+dr= data.frame(dr)
+
+plot(dr$x, dr$y)
+                    
+                           
+                            ifelse(nchar(age_grp) == 3,
+                            substring(age_grp, 3,3),
+                             substring(age_grp, 4,6)))))
+
+
+%>%  
+  filter(from >=15) %>% 
+  slice(rep(seq_len(n()), Diff)) %>%
+  group_by(sexe, age_grp) %>%
+  mutate(id = row_number()-1,
+         age = from + id) %>%
+  select(!c(from, to, Diff, id)) %>%
+  pivot_longer(cols = Y2016:Y2060, names_to = "Year", values_to = "Mortality.rate") %>%
+  mutate(Year = as.numeric(gsub("Y", "", Year))) %>%
+  group_by(sexe, age_grp, age, Year) %>%
+  slice(rep(seq_len(n()), ifelse(Year != 2016, 15, 14))) %>%
+  mutate(Year = row_number()-1 + Year,
+         Mortality.rate = ifelse(Year != min(Year), NA, Mortality.rate)) %>%
+  filter(Year <= 2060) %>%
+  group_by(sexe, age_grp, age) %>%
+  mutate(Mortality.rate = na.approx(Mortality.rate),
+         Change = ((Mortality.rate - first(Mortality.rate))/first(Mortality.rate))*100)
+
+Mortality.rate.projection.age %>%
+  mutate(group = paste(age_grp, sexe),
+         group = factor(group,
+                        levels = c("0-4 Female",
+                                   "0-4 Male",
+                                   "5-14 Female",
+                                   "5-14 Male",
+                                   "15-29 Female",
+                                   "15-29 Male",
+                                   "30-49 Female",
+                                   "30-49 Male",
+                                   "50-69 Female",
+                                   "50-69 Male",
+                                   "70-110 Female",
+                                   "70-110 Male"))) %>%
+  ggplot() + geom_line(aes(x = Year, y = Change, group = group, color = group ))+
+  ylab("") +
+  xlab("") +
+  labs(title = "Percentage change in mortality rate", subtitle = "Data linearly interpolated") +
+  theme_minimal()
+
+```
+</details> 
+
+# reference
