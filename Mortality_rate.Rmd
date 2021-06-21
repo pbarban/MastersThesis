@@ -16,7 +16,8 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.align='
 
 ```{r}
 want = c("dplyr",
-         "stringr")
+         "stringr",
+         "rmarkdown")
 
 have = want %in% rownames(installed.packages())
 
@@ -72,8 +73,9 @@ paged_table(Mortality.rate.projection)
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 
 library(stats)
-install.packages("tidyverse")
 library(tidyverse)
+install.packages("zoo")
+library(zoo)
 
 Mortality.rate.projection.age = Mortality.rate.projection %>% 
   filter(age_grp != "Total") %>%
@@ -83,9 +85,33 @@ Mortality.rate.projection.age = Mortality.rate.projection %>%
          to = as.numeric(ifelse(nchar(age_grp) == 5,
                            substring(age_grp, 4,5),
                            from)),
-         age = (from+to)/2) %>%
+         age = round((from+to)/2)) %>%
   group_by(sexe)  %>%
- complete(age = seq(min(age), max(age), by = 1))
+ complete(age = seq(min(age), max(age), by = 1))  %>%
+  mutate(across(c(Y2016:Y2060), na.approx)) %>%
+  select(!c(age_grp, from, to)) %>% 
+  pivot_longer(!c(sexe, age), names_to = "Year", values_to = "Mortality_rate") %>% 
+  mutate(Year = as.numeric(gsub("Y","",Year)))%>%
+  group_by(sexe, age) %>% 
+ complete(Year = seq(min(Year), max(Year), by = 1)) %>% 
+  mutate(Mortality_rate = na.approx(Mortality_rate))
+
+
+Mortality.rate.projection.age %>% 
+  filter(Year == 2016 & age < 90) %>% 
+ggplot() +
+  aes(x = age, y = Mortality_rate  , group = sexe,  fill = sexe) + 
+  geom_histogram(aes(color = sexe, fill = sexe),
+                         alpha = 0.4, stat = "count" ) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800")) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800"))+
+  theme_minimal() +
+  ylab("") +
+  xlab("age") +
+  theme(legend.position="top")
+
+
+
 
 
 dr <- stats::approx(Mortality.rate.projection.age$age, Mortality.rate.projection.age$Y2016, xout = 0:max(Mortality.rate.projection.age$age))
