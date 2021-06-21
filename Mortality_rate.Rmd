@@ -1,9 +1,10 @@
 ---
-title: "TITLE"
+title: "Mortality rate"
 output:
   github_document
 bibliography: Bibli.bib
 csl: nature.csl
+always_allow_html: true
 ---
 
 ```{r setup, include=FALSE}
@@ -17,7 +18,11 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.align='
 ```{r}
 want = c("dplyr",
          "stringr",
-         "rmarkdown")
+         "rmarkdown",
+         "stats", 
+         "tidyverse",
+         "zoo", 
+         "gganimate")
 
 have = want %in% rownames(installed.packages())
 
@@ -33,9 +38,7 @@ rm(have, want, junk)
 ```
 </details> 
 
-<details>
-<summary>Codess</summary>
-<p>
+
 
 # Introduction
 
@@ -46,6 +49,10 @@ rm(have, want, junk)
 Regional projections of mortality for years 2016-2060.
 
 (Source: [WHO](https://www.who.int/healthinfo/global_burden_disease/projections/en/) )
+
+<details>
+<summary>Codes</summary>
+<p>
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
@@ -62,20 +69,20 @@ Y2060 = c(0.00065,	0.00012,	0.00067,	0.00188,	0.00714,	0.05645,	0.00057,	0.00009
 Mortality.rate.projection = data.frame(sexe,age_grp,Y2016, Y2030,Y2045,Y2060 )
 
 ```
+</details> 
+
 
 ### Mortality rate projection for euro zone
 ```{r,echo= FALSE}
 paged_table(Mortality.rate.projection)
 ```
 
+<details>
+<summary>Codes</summary>
+<p>
 
 ### Percentage change
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
-
-library(stats)
-library(tidyverse)
-install.packages("zoo")
-library(zoo)
 
 Mortality.rate.projection.age = Mortality.rate.projection %>% 
   filter(age_grp != "Total") %>%
@@ -97,75 +104,72 @@ Mortality.rate.projection.age = Mortality.rate.projection %>%
   mutate(Mortality_rate = na.approx(Mortality_rate))
 
 
-Mortality.rate.projection.age %>% 
-  filter(Year == 2016 & age < 90) %>% 
-ggplot() +
-  aes(x = age, y = Mortality_rate  , group = sexe,  fill = sexe) + 
-  geom_histogram(aes(color = sexe, fill = sexe),
-                         alpha = 0.4, stat = "count" ) +
-  scale_fill_manual(values = c("#00AFBB", "#E7B800")) +
-  scale_color_manual(values = c("#00AFBB", "#E7B800"))+
+Mortality.rate.plot <- Mortality.rate.projection.age %>% 
+  filter(age < 90) 
+
+  
+Mortality.rate.plot <- ggplot(subset(Mortality.rate.plot, sexe %in% "Male"), 
+       aes(x = age,
+           y = Mortality_rate,
+           group = sexe,
+           fill = sexe)) +
+  geom_col(stat = 'identity',
+           alpha = 0.4) +
+   geom_col(data = subset(Mortality.rate.plot, sexe %in% "Female"), 
+            aes(x = age,
+           y = Mortality_rate,
+           group = sexe,
+           fill = sexe,
+           stat = 'identity'),
+           alpha = 0.4) +
+   scale_fill_manual(values = c("#E7B800", "#00AFBB")) +
+  scale_color_manual(values = c("#E7B800", "#00AFBB"))+
   theme_minimal() +
   ylab("") +
   xlab("age") +
   theme(legend.position="top")
 
+Mortality.rate.plot <- Mortality.rate.plot + 
+ labs(
+      title = "Mortality Rate Projection\nin France\n\n{closest_state}",
+      caption = "\n\nData Source: /www.who.int/healthinfo/global_burden_disease"
+     )
+
+Mortality.rate.plot <- Mortality.rate.plot +
+  theme(axis.text = element_text(size = 14),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+       legend.key.size = unit(0.75, "cm"),
+       legend.text = element_text(size = 15,face = "bold"),
+       legend.title = element_blank(),
+       plot.title = element_text(size = 22,hjust = 0.5,face = "bold"),
+       plot.subtitle = element_text(size = 14, hjust = 0.5,face = "bold"),
+       axis.title.x = element_text(size = 12,face = "bold"),
+       plot.caption = element_text(size = 12, hjust = 0.5,face = "italic",color = "gray"))
 
 
-
-
-dr <- stats::approx(Mortality.rate.projection.age$age, Mortality.rate.projection.age$Y2016, xout = 0:max(Mortality.rate.projection.age$age))
- 
-dr= data.frame(dr)
-
-plot(dr$x, dr$y)
-                    
-                           
-                            ifelse(nchar(age_grp) == 3,
-                            substring(age_grp, 3,3),
-                             substring(age_grp, 4,6)))))
-
-
-%>%  
-  filter(from >=15) %>% 
-  slice(rep(seq_len(n()), Diff)) %>%
-  group_by(sexe, age_grp) %>%
-  mutate(id = row_number()-1,
-         age = from + id) %>%
-  select(!c(from, to, Diff, id)) %>%
-  pivot_longer(cols = Y2016:Y2060, names_to = "Year", values_to = "Mortality.rate") %>%
-  mutate(Year = as.numeric(gsub("Y", "", Year))) %>%
-  group_by(sexe, age_grp, age, Year) %>%
-  slice(rep(seq_len(n()), ifelse(Year != 2016, 15, 14))) %>%
-  mutate(Year = row_number()-1 + Year,
-         Mortality.rate = ifelse(Year != min(Year), NA, Mortality.rate)) %>%
-  filter(Year <= 2060) %>%
-  group_by(sexe, age_grp, age) %>%
-  mutate(Mortality.rate = na.approx(Mortality.rate),
-         Change = ((Mortality.rate - first(Mortality.rate))/first(Mortality.rate))*100)
-
-Mortality.rate.projection.age %>%
-  mutate(group = paste(age_grp, sexe),
-         group = factor(group,
-                        levels = c("0-4 Female",
-                                   "0-4 Male",
-                                   "5-14 Female",
-                                   "5-14 Male",
-                                   "15-29 Female",
-                                   "15-29 Male",
-                                   "30-49 Female",
-                                   "30-49 Male",
-                                   "50-69 Female",
-                                   "50-69 Male",
-                                   "70-110 Female",
-                                   "70-110 Male"))) %>%
-  ggplot() + geom_line(aes(x = Year, y = Change, group = group, color = group ))+
-  ylab("") +
-  xlab("") +
-  labs(title = "Percentage change in mortality rate", subtitle = "Data linearly interpolated") +
-  theme_minimal()
+Mortality.rate.plot <- Mortality.rate.plot + 
+  transition_states(Year,
+                    transition_length = 0.25,
+                    state_length = 0.25) + 
+  enter_fade() +
+  exit_fade() + 
+  ease_aes('cubic-in-out')
 
 ```
 </details> 
+
+
+
+```{r, echo =FALSE}
+animate(Mortality.rate.plot,
+        fps = 24,
+        duration = 30,
+        width = 500,
+        height = 500,
+        renderer = gifski_renderer("Mortality.rate.plot.gif"))
+```
+
+
 
 # reference
