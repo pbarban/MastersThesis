@@ -11,7 +11,7 @@ Population Projection
 #Rtools is necessary to run this chunk of codes
 #You can download it here: https://cran.r-project.org/bin/windows/Rtools/
 
-want = c("dplyr","readxl", "ggpol","tidyr","AMR")
+want = c("dplyr","readxl", "ggpol","tidyr","forcats")
 
 have = want %in% rownames(installed.packages())
 
@@ -31,11 +31,11 @@ library(gganimate)
 devtools::install_github("r-rust/gifski")
 ```
 
-    ##          checking for file 'C:\Users\Pierre\AppData\Local\Temp\Rtmpeivynv\remotes7ef82a4f5d\r-rust-gifski-6b86cc6/DESCRIPTION' ...     checking for file 'C:\Users\Pierre\AppData\Local\Temp\Rtmpeivynv\remotes7ef82a4f5d\r-rust-gifski-6b86cc6/DESCRIPTION' ...   v  checking for file 'C:\Users\Pierre\AppData\Local\Temp\Rtmpeivynv\remotes7ef82a4f5d\r-rust-gifski-6b86cc6/DESCRIPTION' (783ms)
-    ##       -  preparing 'gifski':
+    ##          checking for file 'C:\Users\Pierre\AppData\Local\Temp\Rtmpe02w5E\remotes6a9422343933\r-rust-gifski-6b86cc6/DESCRIPTION' ...     checking for file 'C:\Users\Pierre\AppData\Local\Temp\Rtmpe02w5E\remotes6a9422343933\r-rust-gifski-6b86cc6/DESCRIPTION' ...   v  checking for file 'C:\Users\Pierre\AppData\Local\Temp\Rtmpe02w5E\remotes6a9422343933\r-rust-gifski-6b86cc6/DESCRIPTION' (1s)
+    ##       -  preparing 'gifski': (425ms)
     ##      checking DESCRIPTION meta-information ...     checking DESCRIPTION meta-information ...   v  checking DESCRIPTION meta-information
     ##   -  cleaning src
-    ##       -  checking for LF line-endings in source and make files and shell scripts (567ms)
+    ##       -  checking for LF line-endings in source and make files and shell scripts (646ms)
     ##       -  checking for empty or unneeded directories
     ##       -  building 'gifski_1.4.3-1.tar.gz'
     ##   Avis :     Avis : file 'gifski/configure' did not have execute permissions: corrected
@@ -73,7 +73,7 @@ unz(temp, "projpop0760_FECbasESPcentMIGcent.xls")
 ```
 
     ## A connection with                                                                                                                        
-    ## description "C:\\Users\\Pierre\\AppData\\Local\\Temp\\Rtmpeivynv\\file7ef8319675d4:projpop0760_FECbasESPcentMIGcent.xls"
+    ## description "C:\\Users\\Pierre\\AppData\\Local\\Temp\\Rtmpe02w5E\\file6a945a66561d:projpop0760_FECbasESPcentMIGcent.xls"
     ## class       "unz"                                                                                                       
     ## mode        "r"                                                                                                         
     ## text        "text"                                                                                                      
@@ -93,30 +93,33 @@ Pop.H = Pop.1 %>%
   rename( age = "Âge au 1er janvier") %>%
   mutate(age = as.numeric(age),
          sexe = "Male") %>%
-  filter(age <= 100) %>%
   pivot_longer(!c(age, sexe),names_to = "year",values_to = "Pop" )
 
 Pop.F = Pop.2 %>% 
   rename( age = "Âge au 1er janvier") %>%
   mutate(age = as.numeric(age),
          sexe = "Female") %>%
-  filter(age <= 100) %>%
   pivot_longer(!c(age, sexe),names_to = "year",values_to = "Pop" )
 
 Pop.proj = rbind(Pop.H, Pop.F) %>%
   mutate(year = as.numeric(year))
 
-Pop.proj.cat = Pop.proj %>%
-  filter(age > 0 ) %>% 
-  mutate(age_grp = age_groups(age, 1:20 * 5)) 
+Pop.proj.cat = Pop.proj %>% 
+  mutate(age_grp.FACTOR = cut( age, breaks = seq(0,150, by = 5), include.lowest = T),
+         age_grp = as.character(age_grp.FACTOR), 
+         age_grp = gsub("\\[|\\]|\\(|\\)", "", age_grp),
+         age_grp = gsub(",", "-", age_grp),
+         order = as.numeric(substr(age_grp,1,regexpr("-",age_grp)-1))) %>% 
+  na.omit()
+
+saveRDS(Pop.proj.cat, "Data/Pop.proj.rds")
 
 PopPyramid <- Pop.proj.cat %>% 
-  group_by(sexe, year, age_grp) %>% 
+  group_by(sexe, year, age_grp, order) %>% 
   summarise(Pop = sum(Pop))%>% 
   mutate(Pop = ifelse(sexe == 'Female', as.integer(Pop * -1), as.integer(Pop)),
-         sexe = as.factor(sexe),
-          age_grp = as.factor(age_grp)) %>% 
- ggplot(aes(x = age_grp,
+         sexe = as.factor(sexe)) %>% 
+ ggplot(aes(x = fct_reorder(age_grp, order),
             y = Pop/1000,
             fill = sexe)) +
  geom_bar(stat = "identity") +
@@ -158,8 +161,8 @@ PopPyramid <- PopPyramid +
 
 PopPyramid <- PopPyramid + 
   transition_states(year,
-                    transition_length = 0.25,
-                    state_length = 0.25) + 
+                    transition_length = 1,
+                    state_length = 1) + 
   enter_fade() +
   exit_fade() + 
   ease_aes('cubic-in-out')
