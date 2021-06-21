@@ -170,6 +170,42 @@ animate(Mortality.rate.plot,
         renderer = gifski_renderer("Mortality.rate.plot.gif"))
 ```
 
+```{r, render=FALSE}
+
+#brouillon
+
+library(tidyverse)
+library(glue)
+
+
+Pop.proj = readRDS("Data/Pop.proj.rds") %>% 
+  select(-age_grp.FACTOR) %>% 
+  filter(sexe == "Male" & year < 2010 & age < 3)
+
+%>% 
+  slice(rep(1:n(), each = 3)) %>% 
+  group_by(year, sexe, age) %>% 
+  mutate(id = row_number() - 1 + year)
+  
+  
+  
+  complete(TEST = seq(2007 , 2009,by = 1))
+  
+  
+  
+ # pivot_wider( names_from = year, values_from = Pop )
+ # group_split(sexe, year) 
+
+
+
+
+
+
+
+test =  data.frame(a = seq(2007,2050)) %>% 
+  mutate(age = row_number()-1)
+
+```
 
 
 # reference
