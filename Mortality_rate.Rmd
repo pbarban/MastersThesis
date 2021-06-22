@@ -211,5 +211,32 @@ test =  data.frame(a = seq(2007,2050)) %>%
 
 ```
 
+```{r, render= FALSE}
+yy = grep("y2", colnames(Pop.proj))
+yy
+length(yy)
+
+
+Pop.proj.male = Pop.proj %>%
+  filter(sexe == "Male")
+Pop.proj.female = Pop.proj %>%
+  filter(sexe == "Female")
+
+dim(Pop.proj)
+dea = Pop.proj.male[,-ncol(Pop.proj.male)]; dim(dea)
+yy = grep("y2", colnames(dea))
+dea[,yy] = as.numeric(0)
+
+
+max(dea$age)
+for (A in 1:(nrow(dea)-1) ){ # index les num de colonnes
+  for(Y in yy){ # indexe les années/colonnes
+    dea[A, Y] = (Pop.proj.male[A, Y] - Pop.proj.male[A+1, Y+1]) / Pop.proj.male[A, Y]
+  } # indexe les années/colonnes
+} # index les num de colonnes
+dea[nrow(dea), yy] = 1
+plot( dea$age, dea$y2027)
+```
+
 
 # reference
