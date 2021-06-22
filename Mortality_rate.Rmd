@@ -180,6 +180,10 @@ library(glue)
 
 Pop.proj = readRDS("Data/Pop.proj.rds") %>% 
   select(-age_grp.FACTOR) %>% 
+  pivot_wider( names_from = year, values_from = Pop )
+  
+  
+  
   filter(sexe == "Male" & year < 2010 & age < 3)
 
 %>% 
