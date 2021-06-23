@@ -32,7 +32,7 @@ rm(have, want, junk)
 
 # Introduction
 
-# Mortality
+# WHO data
 
 ## Mortality rate projection
 
@@ -50,7 +50,7 @@ Regional projections of mortality for years 2016-2060.
 
 </details>
 
-### Mortality rate projection for euro zone
+## Mortality rate projection for euro zone
 
 <div data-pagedtable="false">
 
@@ -60,15 +60,33 @@ Regional projections of mortality for years 2016-2060.
 
 </div>
 
+# INSEE data
+
 <details>
 
-<summary>Codes</summary>
+<summary>Download</summary>
 
 <p>
 
-### Percentage change
+``` r
+temp <-  tempfile()
 
-</details>
+dataURL <- "https://www.insee.fr/fr/statistiques/fichier/2530035/projpop0550_SP01.xls"
+download.file(dataURL, destfile=temp, mode='wb')
+
+Pop.proj <- readxl::read_excel(temp, skip = 4, col_names = TRUE)
+
+
+dataURL <- "https://www.insee.fr/fr/statistiques/fichier/2530048/projpop0550_SD01.xls"
+download.file(dataURL, destfile=temp, mode='wb')
+Mortality.rate <- readxl::read_excel(temp, skip = 4, col_names = TRUE)
+
+unlink(temp)
+```
+
+<details>
+
+Blabla
 
 <details>
 
@@ -77,16 +95,93 @@ Regional projections of mortality for years 2016-2060.
 <p>
 
 ``` r
-animate(Mortality.rate.plot,
-        fps = 24,
-        duration = 30,
-        width = 500,
-        height = 500,
-        renderer = gifski_renderer("Mortality.rate.plot.gif"))
+Pop.proj = Pop.proj %>% 
+  na.omit() %>% 
+  mutate(sexe = ifelse(SEXE == "1", "Male", "Female")) %>% 
+  rename( "age" = starts_with("AGE")) %>% 
+  mutate(across(.cols = c(everything(), - sexe),  as.numeric),
+         age = ifelse(is.na(age)== T, 105, age)) %>% 
+  select(-SEXE) %>% 
+  pivot_longer(!c(age, sexe), names_to = "year", values_to = "Pop") 
+
+Mortality.rate = Mortality.rate %>% 
+  na.omit() %>% 
+  mutate(sexe = ifelse(SEXE == "1", "Male", "Female")) %>% 
+  rename( "age" = starts_with("AGE")) %>% 
+  mutate(across(.cols = c(everything(), - sexe),  as.numeric),
+         age = ifelse(is.na(age)== T, 105, age)) %>% 
+  select(-SEXE) %>% 
+  pivot_longer(!c(age, sexe), names_to = "year", values_to = "Deaths") %>% 
+  na.omit()
+
+Pop.proj = Pop.proj %>% 
+  merge(Mortality.rate, by = c("age", "sexe", "year")) %>% 
+  mutate(Mortality.rate = Deaths/Pop)
 ```
 
-<img src="Mortality_rate_files/figure-gfm/unnamed-chunk-5-1.gif" style="display: block; margin: auto;" />
+</details>
+
+## Visualization
+
+<details>
+
+<summary>Codes</summary>
+
+<p>
+
+``` r
+Mortality.rate.plot <- Pop.proj
+
+  
+Mortality.rate.plot <- ggplot(subset(Mortality.rate.plot, sexe %in% "Male"), 
+       aes(x = age,
+           y = Mortality.rate,
+           group = sexe,
+           fill = sexe)) +
+  geom_col(stat = 'identity',
+           alpha = 0.4) +
+   geom_col(data = subset(Mortality.rate.plot, sexe %in% "Female"), 
+            aes(x = age,
+           y = Mortality.rate,
+           group = sexe,
+           fill = sexe,
+           stat = 'identity'),
+           alpha = 0.4) +
+   scale_fill_manual(values = c("#E7B800", "#00AFBB")) +
+  scale_color_manual(values = c("#E7B800", "#00AFBB"))+
+  theme_minimal() +
+  ylab("") +
+  xlab("age") +
+  theme(legend.position="top")
+
+Mortality.rate.plot <- Mortality.rate.plot + 
+ labs(
+      title = "Mortality Rate Projection\nin France\n\n{closest_state}",
+      caption = "\n\nData Source: /www.who.int/healthinfo/global_burden_disease"
+     )
+
+Mortality.rate.plot <- Mortality.rate.plot +
+  theme(axis.text = element_text(size = 14),
+        axis.ticks.x=element_blank(),
+       legend.key.size = unit(0.75, "cm"),
+       legend.text = element_text(size = 15,face = "bold"),
+       legend.title = element_blank(),
+       plot.title = element_text(size = 22,hjust = 0.5,face = "bold"),
+       plot.subtitle = element_text(size = 14, hjust = 0.5,face = "bold"),
+       axis.title.x = element_text(size = 12,face = "bold"),
+       plot.caption = element_text(size = 12, hjust = 0.5,face = "italic",color = "gray"))
+
+Mortality.rate.plot <- Mortality.rate.plot + 
+  transition_states(year,
+                    transition_length = 0.25,
+                    state_length = 0.25) + 
+  enter_fade() +
+  exit_fade() + 
+  ease_aes('cubic-in-out')
+```
 
 </details>
+
+<img src="Mortality_rate_files/figure-gfm/unnamed-chunk-7-1.gif" style="display: block; margin: auto;" />
 
 # reference

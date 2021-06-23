@@ -42,7 +42,7 @@ rm(have, want, junk)
 
 # Introduction
 
-# Mortality 
+# WHO data
 
 ## Mortality rate projection
 
@@ -72,52 +72,93 @@ Mortality.rate.projection = data.frame(sexe,age_grp,Y2016, Y2030,Y2045,Y2060 )
 </details> 
 
 
-### Mortality rate projection for euro zone
+## Mortality rate projection for euro zone
 ```{r,echo= FALSE}
 paged_table(Mortality.rate.projection)
 ```
+
+# INSEE data
+
+<details>
+<summary>Download</summary>
+<p>
+
+```{r}
+
+temp <-  tempfile()
+
+dataURL <- "https://www.insee.fr/fr/statistiques/fichier/2530035/projpop0550_SP01.xls"
+download.file(dataURL, destfile=temp, mode='wb')
+
+Pop.proj <- readxl::read_excel(temp, skip = 4, col_names = TRUE)
+
+
+dataURL <- "https://www.insee.fr/fr/statistiques/fichier/2530048/projpop0550_SD01.xls"
+download.file(dataURL, destfile=temp, mode='wb')
+Mortality.rate <- readxl::read_excel(temp, skip = 4, col_names = TRUE)
+
+unlink(temp)
+
+```
+<details>
+
+Blabla
 
 <details>
 <summary>Codes</summary>
 <p>
 
-### Percentage change
-```{r, echo=FALSE, message=FALSE, warning=FALSE}
+```{r}
+Pop.proj = Pop.proj %>% 
+  na.omit() %>% 
+  mutate(sexe = ifelse(SEXE == "1", "Male", "Female")) %>% 
+  rename( "age" = starts_with("AGE")) %>% 
+  mutate(across(.cols = c(everything(), - sexe),  as.numeric),
+         age = ifelse(is.na(age)== T, 105, age)) %>% 
+  select(-SEXE) %>% 
+  pivot_longer(!c(age, sexe), names_to = "year", values_to = "Pop") 
 
-Mortality.rate.projection.age = Mortality.rate.projection %>% 
-  filter(age_grp != "Total") %>%
-  mutate(from = as.numeric(str_replace(string = age_grp,
-            pattern = "(^\\d+).*",
-            replacement = "\\1")),
-         to = as.numeric(ifelse(nchar(age_grp) == 5,
-                           substring(age_grp, 4,5),
-                           from)),
-         age = round((from+to)/2)) %>%
-  group_by(sexe)  %>%
- complete(age = seq(min(age), max(age), by = 1))  %>%
-  mutate(across(c(Y2016:Y2060), na.approx)) %>%
-  select(!c(age_grp, from, to)) %>% 
-  pivot_longer(!c(sexe, age), names_to = "Year", values_to = "Mortality_rate") %>% 
-  mutate(Year = as.numeric(gsub("Y","",Year)))%>%
-  group_by(sexe, age) %>% 
- complete(Year = seq(min(Year), max(Year), by = 1)) %>% 
-  mutate(Mortality_rate = na.approx(Mortality_rate))
+Mortality.rate = Mortality.rate %>% 
+  na.omit() %>% 
+  mutate(sexe = ifelse(SEXE == "1", "Male", "Female")) %>% 
+  rename( "age" = starts_with("AGE")) %>% 
+  mutate(across(.cols = c(everything(), - sexe),  as.numeric),
+         age = ifelse(is.na(age)== T, 105, age)) %>% 
+  select(-SEXE) %>% 
+  pivot_longer(!c(age, sexe), names_to = "year", values_to = "Deaths") %>% 
+  na.omit()
+
+Pop.proj = Pop.proj %>% 
+  merge(Mortality.rate, by = c("age", "sexe", "year")) %>% 
+  mutate(Mortality.rate = Deaths/Pop)
+
+  
+
+```
+</details>
 
 
-Mortality.rate.plot <- Mortality.rate.projection.age %>% 
-  filter(age < 90) 
+## Visualization
+
+<details>
+<summary>Codes</summary>
+<p>
+
+```{r, message=FALSE, warning=FALSE}
+
+Mortality.rate.plot <- Pop.proj
 
   
 Mortality.rate.plot <- ggplot(subset(Mortality.rate.plot, sexe %in% "Male"), 
        aes(x = age,
-           y = Mortality_rate,
+           y = Mortality.rate,
            group = sexe,
            fill = sexe)) +
   geom_col(stat = 'identity',
            alpha = 0.4) +
    geom_col(data = subset(Mortality.rate.plot, sexe %in% "Female"), 
             aes(x = age,
-           y = Mortality_rate,
+           y = Mortality.rate,
            group = sexe,
            fill = sexe,
            stat = 'identity'),
@@ -137,7 +178,6 @@ Mortality.rate.plot <- Mortality.rate.plot +
 
 Mortality.rate.plot <- Mortality.rate.plot +
   theme(axis.text = element_text(size = 14),
-        axis.text.x=element_blank(),
         axis.ticks.x=element_blank(),
        legend.key.size = unit(0.75, "cm"),
        legend.text = element_text(size = 15,face = "bold"),
@@ -147,9 +187,8 @@ Mortality.rate.plot <- Mortality.rate.plot +
        axis.title.x = element_text(size = 12,face = "bold"),
        plot.caption = element_text(size = 12, hjust = 0.5,face = "italic",color = "gray"))
 
-
 Mortality.rate.plot <- Mortality.rate.plot + 
-  transition_states(Year,
+  transition_states(year,
                     transition_length = 0.25,
                     state_length = 0.25) + 
   enter_fade() +
@@ -161,6 +200,7 @@ Mortality.rate.plot <- Mortality.rate.plot +
 
 
 
+
 ```{r, echo =FALSE}
 animate(Mortality.rate.plot,
         fps = 24,
@@ -168,74 +208,6 @@ animate(Mortality.rate.plot,
         width = 500,
         height = 500,
         renderer = gifski_renderer("Mortality.rate.plot.gif"))
-```
-
-```{r, render=FALSE}
-
-#brouillon
-
-library(tidyverse)
-library(glue)
-
-
-Pop.proj = readRDS("Data/Pop.proj.rds") %>% 
-  select(-age_grp.FACTOR) %>% 
-  pivot_wider( names_from = year, values_from = Pop )
-  
-  
-  
-  filter(sexe == "Male" & year < 2010 & age < 3)
-
-%>% 
-  slice(rep(1:n(), each = 3)) %>% 
-  group_by(year, sexe, age) %>% 
-  mutate(id = row_number() - 1 + year)
-  
-  
-  
-  complete(TEST = seq(2007 , 2009,by = 1))
-  
-  
-  
- # pivot_wider( names_from = year, values_from = Pop )
- # group_split(sexe, year) 
-
-
-
-
-
-
-
-test =  data.frame(a = seq(2007,2050)) %>% 
-  mutate(age = row_number()-1)
-
-```
-
-```{r, render= FALSE}
-yy = grep("y2", colnames(Pop.proj))
-yy
-length(yy)
-
-
-Pop.proj.male = Pop.proj %>%
-  filter(sexe == "Male")
-Pop.proj.female = Pop.proj %>%
-  filter(sexe == "Female")
-
-dim(Pop.proj)
-dea = Pop.proj.male[,-ncol(Pop.proj.male)]; dim(dea)
-yy = grep("y2", colnames(dea))
-dea[,yy] = as.numeric(0)
-
-
-max(dea$age)
-for (A in 1:(nrow(dea)-1) ){ # index les num de colonnes
-  for(Y in yy){ # indexe les années/colonnes
-    dea[A, Y] = (Pop.proj.male[A, Y] - Pop.proj.male[A+1, Y+1]) / Pop.proj.male[A, Y]
-  } # indexe les années/colonnes
-} # index les num de colonnes
-dea[nrow(dea), yy] = 1
-plot( dea$age, dea$y2027)
 ```
 
 
