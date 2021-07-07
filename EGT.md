@@ -9,7 +9,9 @@ TITLE
 want = c("dplyr",
          "foreign",
         "ggplot2",
-        "forcats")
+        "forcats",
+        "survey",
+        "gtsummary")
 
 have = want %in% rownames(installed.packages())
 
@@ -48,9 +50,6 @@ Dpl.data = Dpl.Rawdata  %>%
 # Weighting of the survey
 
 ``` r
-library(survey)
-library(gtsummary)
-
 Dpl.data.Ind <- Dpl.data %>%
   distinct(ident_ind, .keep_all = TRUE) %>%
   mutate(sexe = ifelse(sexe == 1, "male", "female"))
@@ -93,10 +92,13 @@ ggplot(dw$variables) +
 ``` r
 Dpl.data.active =  Dpl.data %>% 
   filter(v2_mtp ==1.10 | v2_mtp == 2.2) %>% 
-  mutate(age_grp.FACTOR = cut( age, breaks = seq(0,150, by = 5), include.lowest = T),
+  mutate(age_grp.FACTOR = cut( age, breaks = seq(0,150, by = 5), include.lowest = T, right = F),
          age_grp = as.character(age_grp.FACTOR), 
          age_grp = gsub("\\[|\\]|\\(|\\)", "", age_grp),
          age_grp = gsub(",", "-", age_grp),
+         post = sub(".*-","",age_grp),
+         age_grp = sub("-.*", "", age_grp),
+         age_grp = paste0(age_grp,"-", as.numeric(post)-1),
          order = as.numeric(substr(age_grp,1,regexpr("-",age_grp)-1)),
          poids_jour = poids_jour/7,
          Mode = ifelse(v2_mtp == 1.1, "Walking", "Cycling"),
