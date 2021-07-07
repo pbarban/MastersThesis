@@ -79,8 +79,9 @@ paged_table(Mortality.rate.projection)
 
 # INSEE data
 
+
 <details>
-<summary>Download</summary>
+<summary>Packages</summary>
 <p>
 
 ```{r}
@@ -102,10 +103,10 @@ unlink(temp)
 ```
 <details>
 
-Blabla
+# Blabla
 
 <details>
-<summary>Codes</summary>
+<summary>Packages</summary>
 <p>
 
 ```{r}
@@ -135,18 +136,18 @@ Pop.proj = Pop.proj %>%
   
 
 ```
-</details>
-
+<details>
 
 ## Visualization
 
 <details>
-<summary>Codes</summary>
+<summary>Packages</summary>
 <p>
 
 ```{r, message=FALSE, warning=FALSE}
 
-Mortality.rate.plot <- Pop.proj
+Mortality.rate.plot <- Pop.proj %>% 
+  filter(age < 100)
 
   
 Mortality.rate.plot <- ggplot(subset(Mortality.rate.plot, sexe %in% "Male"), 
@@ -173,7 +174,7 @@ Mortality.rate.plot <- ggplot(subset(Mortality.rate.plot, sexe %in% "Male"),
 Mortality.rate.plot <- Mortality.rate.plot + 
  labs(
       title = "Mortality Rate Projection\nin France\n\n{closest_state}",
-      caption = "\n\nData Source: /www.who.int/healthinfo/global_burden_disease"
+      caption = "\n\nData Source: www.insee.fr"
      )
 
 Mortality.rate.plot <- Mortality.rate.plot +
@@ -196,8 +197,7 @@ Mortality.rate.plot <- Mortality.rate.plot +
   ease_aes('cubic-in-out')
 
 ```
-</details> 
-
+<details>
 
 
 

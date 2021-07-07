@@ -64,7 +64,7 @@ Regional projections of mortality for years 2016-2060.
 
 <details>
 
-<summary>Download</summary>
+<summary>Packages</summary>
 
 <p>
 
@@ -86,11 +86,11 @@ unlink(temp)
 
 <details>
 
-Blabla
+# Blabla
 
 <details>
 
-<summary>Codes</summary>
+<summary>Packages</summary>
 
 <p>
 
@@ -119,18 +119,19 @@ Pop.proj = Pop.proj %>%
   mutate(Mortality.rate = Deaths/Pop)
 ```
 
-</details>
+<details>
 
 ## Visualization
 
 <details>
 
-<summary>Codes</summary>
+<summary>Packages</summary>
 
 <p>
 
 ``` r
-Mortality.rate.plot <- Pop.proj
+Mortality.rate.plot <- Pop.proj %>% 
+  filter(age < 100)
 
   
 Mortality.rate.plot <- ggplot(subset(Mortality.rate.plot, sexe %in% "Male"), 
@@ -157,7 +158,7 @@ Mortality.rate.plot <- ggplot(subset(Mortality.rate.plot, sexe %in% "Male"),
 Mortality.rate.plot <- Mortality.rate.plot + 
  labs(
       title = "Mortality Rate Projection\nin France\n\n{closest_state}",
-      caption = "\n\nData Source: /www.who.int/healthinfo/global_burden_disease"
+      caption = "\n\nData Source: www.insee.fr"
      )
 
 Mortality.rate.plot <- Mortality.rate.plot +
@@ -180,7 +181,7 @@ Mortality.rate.plot <- Mortality.rate.plot +
   ease_aes('cubic-in-out')
 ```
 
-</details>
+<details>
 
 <img src="Mortality_rate_files/figure-gfm/unnamed-chunk-7-1.gif" style="display: block; margin: auto;" />
 
