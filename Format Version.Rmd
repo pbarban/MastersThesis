@@ -1,0 +1,45 @@
+---
+title: "TITLE"
+output:
+  github_document
+bibliography: Bibli.bib
+csl: nature.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.align='center')
+```
+
+<details>
+<summary>Packages</summary>
+<p>
+
+```{r}
+want = c("")
+
+have = want %in% rownames(installed.packages())
+
+# Install the packages that we miss
+if ( any(!have) ) { install.packages( want[!have] ) }
+
+# Load the packages
+junk <- lapply(want, library, character.only = T)
+
+# Remove the objects we created
+rm(have, want, junk)
+
+```
+</details> 
+
+
+# Introduction
+<details>
+<summary>Codes</summary>
+<p>
+
+```{r}
+
+```
+</details> 
+
+# reference
