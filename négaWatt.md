@@ -74,25 +74,18 @@ per cycling trip per person by 393%.
 ``` r
 #négaWatt
 
-negaWatt.data <- read_sheet("https://docs.google.com/spreadsheets/d/1a96mb7exIg634WNtwrflK2xnOZhAb5fU5SOCZShPP0s/edit?usp=sharing")
+test = read.csv("new_nw.csv", sep = ";")
 
-negaWatt.data <- negaWatt.data %>%
-  na.omit() %>%
-  rename("Type" = "km/hab/an")  %>%
-  mutate(Type = ifelse(Type == "Marche à pied", "Walking",
-                       ifelse(Type == "Vélo", "Total_Cycling", "Share_Ebike" ))) %>%
-  pivot_longer(!Type,
-               names_to = "Year",
-               values_to = "value") %>%
-  pivot_wider(id_cols = Year, 
-              names_from = Type,
-              values_from = value) %>%
-  mutate(Ebike = Total_Cycling * Share_Ebike,
-         Normal_bike = Total_Cycling * (1 - Share_Ebike)) %>%
-  pivot_longer(!Year,
-               names_to = "Type",
-               values_to = "value") %>%
-  filter(Type != "Share_Ebike")
+negaWatt.data <- read.csv("new_nw.csv", sep = ";") %>%
+  mutate(Type = ifelse(Type == "Marche", "Walking","Total_Cycling")) %>% 
+  pivot_longer(!Type, names_to = "Year",
+               values_to = "value")%>%
+  na.omit() %>% 
+  mutate(Year = as.numeric(gsub("X", "", Year)),
+         value = as.numeric(value)) %>% 
+  filter(Year <= 2050 & Year >= 2015)
+
+saveRDS(negaWatt.data, "negaWatt.data.rds")
 
 p1 = negaWatt.data %>% 
 ggplot() +  
