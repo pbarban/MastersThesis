@@ -4,6 +4,7 @@ output:
   github_document
 bibliography: Bibli.bib
 csl: nature.csl
+always_allow_html: true
 ---
 
 ```{r setup, include=FALSE}

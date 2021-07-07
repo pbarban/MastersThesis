@@ -74,7 +74,6 @@ per cycling trip per person by 393%.
 ``` r
 #négaWatt
 
-test = read.csv("new_nw.csv", sep = ";")
 
 negaWatt.data <- read.csv("new_nw.csv", sep = ";") %>%
   mutate(Type = ifelse(Type == "Marche", "Walking","Total_Cycling")) %>% 
