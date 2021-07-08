@@ -1,0 +1,1755 @@
+---
+title: "Health Economic Benefits of Active Mobility"
+subtitle: 'Based on the negaWatt scenario'
+author:
+  - Pierre Barban^[AgroParisTech/CIRED, barban@centre-cired.fr]
+  - Philippe Quirion^[CIRED, quirion@centre-cired.fr]
+  - Kévin Jean^[CNAM, kevin.jean@lecnam.net]
+  
+output:
+  html_document:
+    toc: true
+    toc_float: true
+bibliography: Bibliography.bib
+csl: vancouver.csl
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE, echo = FALSE}
+
+# Check if the packages that we need are installed
+want = c("knitr",
+         "formattable",
+         "kableExtra",
+         "rmarkdown",
+         "plotly",
+         "gridExtra",
+         "forcats",
+         "emo",
+         "googlesheets4",
+         "zoo",
+         "stats",
+         "stringr",
+         "tidyr",
+         "readxl",
+         "AMR",
+         "foreign",
+         "dplyr",
+         "Matrix",
+         "grid",
+         "ggplot2",
+         "methods",
+         "base",
+         "readxl")
+
+have = want %in% rownames(installed.packages())
+
+# Install the packages that we miss
+if ( any(!have) ) { install.packages( want[!have] ) }
+
+# Load the packages
+junk <- lapply(want, library, character.only = T)
+
+# Remove the objects we created
+rm(have, want, junk)
+
+##Codes from Federico Vegetti
+
+```
+
+***
+**Travail en cours**
+
+* Données ADEME
+* Reduction sur la morbidité
+
+***
+
+***
+**Question pour la réunion d'aujourd'hui**
+
+* Ponderation de l'ENTD
+* Life Expectancy
+
+***
+
+
+# The négaWatt scenario 
+
+Developed by the négaWatt Association, the "négaWatt 2017-2050" scénario describes a potential pathway describing the technical features for France to reach net carbon neutrality by 2050 while using only renewable energy sources. 
+
+In its method and in its philosophy, the scenario develops a systemic vision of the energy transition which involves more or less significant changes in conditions of use, supply, transmission and production of energy, and therefore changes sensitive to all consumption and production activities in all sectors: housing, tertiary sector, transport, industry, agriculture and food.
+
+Based on national surveys, all trips made in France could be classified into 25 categories and sub-categories, according to the type of trip (commuting, occasional leisure, professional, etc.), its length, and its space (from central Paris to rural areas). In each of them, the negaWatt scenario makes evolve in a differentiated way the travelers x km traveled, as well as their distribution among ten or so modes of
+transport @institut-negawattSyntheseScenarioNegawatt2017.
+
+In the tranportaion sector, the scenario glimpses a society where active mobility, such as walkig and cycling, become the majority of short trips, especialy in urban areas @institut-negawattSyntheseScenarioNegawatt2018.
+
+## Data
+
+| | 2010 | 2020 | 2030 | 2040 | 2050 | 2008-2050 |
+|:---|:---|:---|:---|:---|:---|:---|
+| Vélo Mds de voy.km | 6 | 7 | 16 | 30 | 32 | 473% |
+| voy.km/hab | 90 | 105 | 237 | 420 | 443 | 393% |
+
+From 2018 to 2050, the scenario describes an increase in the distance per cycling trip per person by 393%.
+
+### Visualization
+
+```{r,echo=FALSE}
+#négaWatt
+
+negaWatt.data <- read_sheet("https://docs.google.com/spreadsheets/d/1a96mb7exIg634WNtwrflK2xnOZhAb5fU5SOCZShPP0s/edit?usp=sharing")%>%
+  na.omit() %>%
+  rename("Type" = "km/hab/an")  %>%
+  mutate(Type = ifelse(Type == "Marche à pied", "Walking",
+                       ifelse(Type == "Vélo", "Total_Cycling", "Share_Ebike" ))) %>%
+  pivot_longer(!Type,
+               names_to = "Year",
+               values_to = "value") %>%
+  pivot_wider(id_cols = Year, 
+              names_from = Type,
+              values_from = value) %>%
+  mutate(Ebike = Total_Cycling * Share_Ebike,
+         Normal_bike = Total_Cycling * (1 - Share_Ebike)) %>%
+  pivot_longer(!Year,
+               names_to = "Type",
+               values_to = "value") %>%
+  filter(Type != "Share_Ebike")
+```
+
+```{r}
+#ADEME
+
+ADEME.data <- read_sheet("https://docs.google.com/spreadsheets/d/1LFHU66VoZtDFF2OI2Wr4-bmw_x1UQHhn9gp_TtnNkWE/edit?usp=sharing") %>%
+  mutate_all(as.character)
+
+
+names(ADEME.data)<-gsub("\\.","",names(ADEME.data))
+
+
+
+```
+
+
+
+
+```{r,echo=FALSE}
+p1 = negaWatt.data %>% 
+ggplot() +  
+  geom_line(aes(x = Year, y = value, group = Type, color = Type), size = 1)+
+  ylab("") +
+  xlab("") +
+  labs(title = "négaWatt scenario", subtitle = "In km/inhab/year") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 16),
+        plot.subtitle = element_text(colour = "#595a5c", size = 12),
+        legend.title = element_blank(),
+        legend.text = element_text( size = 10),
+        legend.position="top",
+        axis.text=element_text(size=10),
+        axis.text.x = element_text(angle = 60, vjust = 0.5, hjust=1))+
+  ylim(0, 1250)
+
+p1
+
+
+
+library(purrr)
+p2 <- ADEME.data %>%
+  select(Type, Scenario, Distances7:Distances9)%>% 
+  filter(Type != "Type")  %>% 
+  set_names(slice(.,1)) %>%
+  slice(-1) %>% 
+  pivot_longer(cols = "2015":"2050", names_to = "time", values_to = "Km_jr_hab")%>% 
+  rename("Type"= "Year") %>% 
+  mutate(time = as.numeric(time),
+         Km_jr_hab = as.numeric(Km_jr_hab),
+    diff = lead(time) - time,
+    diff = ifelse(diff < 0 , 1, diff)) %>% 
+    group_by(Type, Scenario, time) %>%
+  slice(rep(1:n(),each = diff)) %>% 
+  mutate(year =  1:n() +time -1) %>% 
+     group_by(Type, Scenario, time) %>% 
+   mutate(Km_jr_hab = ifelse(time != year, NA, Km_jr_hab)) %>% 
+  filter(year <= 2050  ) %>% 
+    group_by(Type, Scenario) %>% 
+  mutate(test = na.approx(Km_jr_hab),
+         Name = paste(Scenario, Type)) %>% 
+   ggplot() +  
+  geom_line(aes(x = year, y = test * 362.5 , group = Name, color = Name), size = 1)+
+  ylab("") +
+  xlab("") +
+  labs(title = "ADEME scenarios", subtitle = "In km/inhab/year") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", size = 16),
+        plot.subtitle = element_text(colour = "#595a5c", size = 12),
+        legend.title = element_blank(),
+        legend.text = element_text( size = 10),
+        legend.position="top",
+        axis.text=element_text(size=10),
+        axis.text.x = element_text(angle = 60, vjust = 0.5, hjust=1)) +
+  ylim(0, 1250)
+p2
+
+```
+
+# Population projection
+
+Scenario low fecundity 2007 from INSEE 
+
+Champ : France métropolitaine
+```{r Download Pop projection data, echo=FALSE, message=FALSE, warning=FALSE, results="hide"}
+#temp <-  tempfile()
+#dataURL <- "https://www.insee.fr/fr/statistiques/pyramide/2418122/excel/projpop0760_FECbasESPcentMIGcent.xls"
+#download.file(dataURL, destfile=temp, mode='wb')
+
+#unz(temp, "projpop0760_FECbasESPcentMIGcent.xls")
+
+#temp <- "/Users/Pierre/Desktop/Academic/M2 - Modelisation/Stage/projpop0760_FECbasESPcentMIGcent.xls"
+
+#Pop.1 <- readxl::read_excel(temp, sheet = "populationH", skip = 4, col_names = TRUE)
+#Pop.2 <- readxl::read_excel(temp, sheet = "populationF", skip = 4, col_names = TRUE)
+
+Pop.1 <- readRDS("Pop.1")
+
+Pop.2 <- readRDS("Pop.2")
+
+#unlink(temp)
+
+```
+
+```{r, echo = FALSE, warning = FALSE,message  = FALSE}
+Pop.H = Pop.1 %>% 
+  rename( age = "Âge au 1er janvier") %>%
+  mutate(age = as.numeric(age),
+         sexe = "Male") %>%
+  filter(age <= 100) %>%
+  pivot_longer(!c(age, sexe),names_to = "year",values_to = "Pop" )
+
+Pop.F = Pop.2 %>% 
+  rename( age = "Âge au 1er janvier") %>%
+  mutate(age = as.numeric(age),
+         sexe = "Female") %>%
+  filter(age <= 100) %>%
+  pivot_longer(!c(age, sexe),names_to = "year",values_to = "Pop" )
+
+Pop.proj = rbind(Pop.H, Pop.F) %>%
+  mutate(year = as.numeric(year))
+
+Pop.proj.cat = Pop.proj %>%
+  filter(age > 0 ) %>% 
+  mutate(age_grp = age_groups(age, 1:20 * 5)) 
+
+library(ggpol)
+PopPyramid <- Pop.proj.cat %>% 
+  group_by(sexe, year, age_grp) %>% 
+  summarise(Pop = sum(Pop))%>% 
+  mutate(Pop = ifelse(sexe == 'Female', as.integer(Pop * -1), as.integer(Pop)),
+         sexe = as.factor(sexe),
+          age_grp = as.factor(age_grp)) %>% 
+ ggplot(aes(x = age_grp,
+            y = Pop/1000,
+            fill = sexe)) +
+ geom_bar(stat = "identity") +
+ scale_fill_manual(values = c("#ee7989" ,"#4682b4")) + 
+ coord_flip() + 
+ facet_share(~ sexe,
+             dir = "h",
+             scales = "free",
+             reverse_num = TRUE)
+
+PopPyramid <-  PopPyramid +
+  theme(panel.background = element_blank(),
+       panel.border = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+       strip.background = element_blank(),
+       strip.text.x = element_blank(),
+        axis.title.y = element_blank(),
+              legend.title = element_blank(),
+       axis.text = element_text(size = 14),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+       legend.key.size = unit(0.75, "cm"),
+       legend.text = element_text(size = 15,face = "bold"),
+       plot.title = element_text(size = 22,hjust = 0.5,face = "bold"),
+       plot.subtitle = element_text(size = 14, hjust = 0.5,face = "bold"),
+       axis.title.x = element_text(size = 12,face = "bold"),
+       plot.caption = element_text(size = 12, hjust = 0.5,face = "italic",color = "gray"))
+
+
+PopPyramid <- PopPyramid + 
+ labs(
+      title = "France Population Projection\nEstimate from 2007 to 2050\n\n{closest_state}",
+      subtitle = "\n\nAge Group",
+      y = "\n\nPopulation (in thousands)",
+      caption = "\n\nData Source: www.insee.fr/fr/statistiques"
+     )
+
+library(gganimate)
+PopPyramid <- PopPyramid + 
+  transition_states(year,
+                    transition_length = 0.25,
+                    state_length = 0.25) + 
+  enter_fade() +
+  exit_fade() + 
+  ease_aes('cubic-in-out')
+```
+
+
+```{r, echo = FALSE, warning = FALSE,message  = FALSE, eval = TRUE}
+library(gifski)
+animate(PopPyramid,
+        fps = 24,
+        duration = 30,
+        width = 500,
+        height = 500,
+        renderer = gifski_renderer("PopPyramid.gif"))
+
+
+paged_table(Pop.proj)
+
+```
+
+# Mortality 
+
+## Mortality rate projection
+
+Regional projections of mortality for years 2016-2060.
+
+(Source: [WHO](https://www.who.int/healthinfo/global_burden_disease/projections/en/) )
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+sexe = c("Both sexes", "Male","Male","Male","Male","Male","Male","Male","Female","Female","Female","Female","Female","Female","Female")
+age_grp = c("Total",	"0-4",	"5-14",	"15-29",	"30-49",	"50-69",	"70-110",	"Total",	"0-4",	"5-14",	"15-29",	"30-49",	"50-69",	"70-110",	"Total")
+Y2016 = c(0.01006,	0.00205,	0.00020,	0.00103,	0.00315,	0.01368,	0.06716,	0.01045,	0.00174,	0.00015,	0.00042,	0.00131,	0.00643,	0.05791,	0.00968)
+
+Y2030 = c(0.01046,	0.00127,	0.00016,	0.00079,	0.00266,	0.01076,	0.06051,	0.01099,	0.00108,	0.00012,	0.00034,	0.00118,	0.00588,	0.04796,	0.00996)
+
+Y2045 = c(0.01202,	0.00087,	0.00013,	0.00074,	0.00203,	0.00902,	0.05864,	0.01219,	0.00075,	0.00010,	0.00030,	0.00092,	0.00514,	0.04965,	0.01186)
+
+Y2060 = c(0.01262,	0.00065,	0.00012,	0.00067,	0.00188,	0.00714,	0.05645,	0.01266,	0.00057,	0.00009,	0.00027,	0.00084,	0.00440,	0.04833,	0.01259)
+
+Mortality.rate.projection = data.frame(sexe,age_grp,Y2016, Y2030,Y2045,Y2060 )
+
+```
+
+### Mortality rate projection for euro zone
+```{r,echo= FALSE}
+paged_table(Mortality.rate.projection)
+```
+
+
+### Percentage change
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+Mortality.rate.projection.age = Mortality.rate.projection %>% 
+  filter(age_grp != "Total") %>%
+  mutate(from = as.numeric(str_replace(string = age_grp,
+            pattern = "(^\\d+).*",
+            replacement = "\\1")),
+         to = as.numeric(ifelse(nchar(age_grp) == 5,
+                           substring(age_grp, 4,5),
+                     ifelse(nchar(age_grp) == 3,
+                            substring(age_grp, 3,3),
+                             substring(age_grp, 4,6)))),
+         Diff = ifelse(is.na(to) == FALSE, to - from, 1)) %>%  
+  filter(from >=15) %>% 
+  slice(rep(seq_len(n()), Diff)) %>%
+  group_by(sexe, age_grp) %>%
+  mutate(id = row_number()-1,
+         age = from + id) %>%
+  select(!c(from, to, Diff, id)) %>%
+  pivot_longer(cols = Y2016:Y2060, names_to = "Year", values_to = "Mortality.rate") %>%
+  mutate(Year = as.numeric(gsub("Y", "", Year))) %>%
+  group_by(sexe, age_grp, age, Year) %>%
+  slice(rep(seq_len(n()), ifelse(Year != 2016, 15, 14))) %>%
+  mutate(Year = row_number()-1 + Year,
+         Mortality.rate = ifelse(Year != min(Year), NA, Mortality.rate)) %>%
+  filter(Year <= 2060) %>%
+  group_by(sexe, age_grp, age) %>%
+  mutate(Mortality.rate = na.approx(Mortality.rate),
+         Change = ((Mortality.rate - first(Mortality.rate))/first(Mortality.rate))*100)
+
+Mortality.rate.projection.age %>%
+  mutate(group = paste(age_grp, sexe),
+         group = factor(group,
+                        levels = c("0-4 Female",
+                                   "0-4 Male",
+                                   "5-14 Female",
+                                   "5-14 Male",
+                                   "15-29 Female",
+                                   "15-29 Male",
+                                   "30-49 Female",
+                                   "30-49 Male",
+                                   "50-69 Female",
+                                   "50-69 Male",
+                                   "70-110 Female",
+                                   "70-110 Male"))) %>%
+  ggplot() + geom_line(aes(x = Year, y = Change, group = group, color = group ))+
+  ylab("") +
+  xlab("") +
+  labs(title = "Percentage change in mortality rate", subtitle = "Data linearly interpolated") +
+  theme_minimal()
+
+```
+
+I then apply the percentage change in mortality rate for each age categories and sexe to the actual French rate for 2016.
+
+```{r}
+
+ age_grp = c("0",	"1-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-79", "80-89", "90-110")
+Female = c(	2.7,	0.23,	0.07,	0.07,	0.13,	0.23,	0.25,	0.36,	0.50,	0.83,	1.49,	2.23,	3.5,	4.9,	6.8,	13.4,	49.9,	175)
+Male = c(	3.3,	0.27,	0.09,	0.09,	0.28,	0.56,	0.68,	0.81,	1.11,	1.73,	2.73,	4.38,	7.3,	11.1,	14.8,	25.8,	75.5,	215)
+
+Mortality.rate.FRANCE.2016 = data.frame(age_grp, Female, Male) %>%
+  pivot_longer(cols = !age_grp, "sexe", values_to ="Mortality.rate.France") %>%
+  mutate(from = as.numeric(str_replace(string = age_grp,
+            pattern = "(^\\d+).*",
+            replacement = "\\1")),
+         to = as.numeric(ifelse(nchar(age_grp) == 5,
+                           substring(age_grp, 4,5),
+                                 ifelse(nchar(age_grp) == 3,
+                                           substring(age_grp, 3,3),
+                                                ifelse(nchar(age_grp) == 6,
+                                                       substring(age_grp, 4,6),NA)))),
+         Diff = ifelse(is.na(to) == FALSE, to - from +1, 1))%>%  
+  slice(rep(seq_len(n()), Diff)) %>%
+  group_by(sexe, age_grp)%>%
+  mutate(id = row_number(), 
+         age = from + id - 1,
+         Median = round(median(age)),
+         Mortality.rate.France = ifelse(age == Median, Mortality.rate.France, NA )) %>%
+  filter(age <= 100) %>%
+  group_by(sexe) %>%
+  mutate(Mortality.rate.France = na.approx(Mortality.rate.France)) %>%
+    filter(age > 0) %>%
+ select(!c(from, to, Diff, id)) %>%
+   mutate(age_grp = age_groups(age, split_at = c(seq(10,110,5)), na.rm = FALSE))
+
+  
+
+All.Data.Mortality.rate = Mortality.rate.projection.age %>%
+  select(sexe, age_grp, age, Year, Change) %>%
+  merge(Mortality.rate.FRANCE.2016, by = c("sexe", "age")) %>%
+  mutate(Mortality.rate = Mortality.rate.France + (Change/100)*Mortality.rate.France)
+
+
+All.Data.Mortality.rate %>%
+  select(sexe, age, Year, Change, Mortality.rate) %>%
+paged_table()
+
+```
+
+## HEAT 
+
+```{r message=FALSE, warning=FALSE, echo= FALSE}
+HEAT_country <- function(type = NULL,
+                         volume,
+                         units = "minutes/week",
+                         Population,
+                         RR = NULL,
+                         Mortality_Rate) {
+  
+  if (!type %in% c('cycling', 'walking')) {
+    stop('"type" must be one of "cycling" or "walking"')}
+
+  #Data of reference
+  if(type == "cycling") {
+    Ref_volume <- 100
+    speed <- 14
+  }
+  if(type == "cycling" & is.null(RR) == T) {
+  RR <- 0.9
+  }
+  
+  if(type == "walking") {
+    Ref_volume <- 168
+    speed <- 4.8 
+  }
+  
+  if(type == "walking" & is.null(RR) == T) {
+    RR <- 0.89
+  }
+  
+  #Conversion
+  if(units =="minutes/week"){
+    volume <- volume #ask Kevin about the 52.5
+  }
+  
+  if(units =="kms/week"){
+    volume <- ((volume/speed)*60) 
+  }
+  
+  if(units =="minutes/year"){
+    volume <- volume/52.5 
+  }
+  
+  if(units =="kms/year"){
+    volume <- ((volume/speed)*60)/52.5 
+  }
+
+  
+  #Equation
+      Ratio_cycling <- volume/Ref_volume
+        Reduction_mortality_rate <- (1-RR)*Ratio_cycling
+        Mortality_Rate_e <- Mortality_Rate*(1-Reduction_mortality_rate)
+        D_u <- Mortality_Rate*Population
+        D_e <- Mortality_Rate_e*Population
+        D_attributed <- round(D_e - D_u, digits = 0)
+        print(D_attributed)
+  }
+```
+This first version of an R package to assess the physcal activity impact of active commuting based the Health Economic Assessment Tool (HEAT) designed by the World Health Organization (WHO). 
+For the purpose of my project, this version can only be applied to a whole country. The online HEAT tool normaly allows to subset a specific part of the population; useful feature to work on a more precise scale as the city level for example.
+
+*Data inputs needed*
+
+Similarly to the online format of HEAT, this function allows the user to assess the benefits on individuals' health of *walking* and *cycling*. To do so, the user is required to add the *volume* of active commute transport mode. In this version, the units accepted are *minutes/week*, *kms/week*, *minutes/year*, and *kms/year*. Then, it is required to add the size of the *population*. The last step for the user is to add the  *mortality rate* in deaths per people. 
+In comparison to the online tool, this package allows users to assess the morbidity rate in addition to the mortality rate. With the right data, it is also possible to disaggregate the studies age range. In fact, the user can precise the Relative Risk *RR* of walking and cycling for each age or age group. If that input is not given by the user, the reference RR is the same as the initial HEAT values.  
+
+HEAT_country( type = *cycling/walking*, volume, units = "minutes/week", Population, RR = **NULL**, Mortality_Rate)
+
+### Example of the HEAT function in usage
+
+
+```{r, echo=TRUE}
+HEAT = HEAT_country(type = "cycling",
+             volume = 8,
+             Population = 10000000,
+             Mortality_Rate = 0.0028)
+```
+
+A population of *10000000* cycling on average a volume of *8* min/week will avoid `r HEAT_country(type = "cycling", volume = 8, Population = 10000000, Mortality_Rate = 0.0028)` premature deaths.
+
+# Walking and cycling in France today
+
+## Enquête nationale transports et déplacements (ENTD) 2008
+
+### Methodology
+
+The units surveyed are located at different levels: the household, the individual and the vehicle (car, motorized two-wheelers, bicycle, etc.). A household is defined as a living unit and includes all the people sharing a commom living place and sharing the same budget and for whom the housing surveyed is the main residence.
+Within the household, a person is drawn to answer in more detail on their movements. Likewise, one vehicle from among all household vehicles (car, motorcycle, bicycle, etc.) is drawn to describe its use for a week.
+
+### Deplacements des individus 
+
+Trips data of the kish (individual drwan to be surveyed) did during a specific day of the
+week and one or two for weekend days.
+
+Explanation of the variables:
+
+* **ident_ind**
+    + Individual ID
+* **v2_mdisttot**
+    + Total distance traveled during the trip
+* **v2_mmoyNs**
+    + Mode of transportation #N used
+* **v2_date_dep**
+    + Date of the trip
+* **poids_jour**
+    + Weight of the day in the week
+* **pondki**
+    + Weight of the individual kish
+* **v2_mtp**
+    + Main mode of transport of the trip
+* **noi**
+    + Serial number of the individual in the household
+
+```{r,echo = FALSE, message=FALSE}
+Dpl.Rawdata = read.dta("/Users/Pierre/Desktop/Academic/M2 - Modelisation/Stage/ENTD/Stata/k_deploc.dta") %>%
+  select(v2_mdisttot,v2_mmoy1s:v2_mmoy4s, ident_ind, v2_date_dep, poids_jour, v2_mtp, pondki, v2_mori1motif)
+
+ENTD.INDIVIDU.rawdata = read.dta("/Users/Pierre/Desktop/Academic/M2 - Modelisation/Stage/ENTD/Stata/Q_INDIVIDU.dta")
+
+ENTD.INDIVIDU.data = ENTD.INDIVIDU.rawdata %>% 
+  select(ident_men, ident_ind,sexe,age, noi)
+
+
+Motifs = read_xlsx("/Users/Pierre/Desktop/Academic/M2 - Modelisation/Stage/Motifs_deplacement.xlsx")
+
+
+Dpl.data = Dpl.Rawdata  %>% 
+  merge(ENTD.INDIVIDU.data, by = "ident_ind") %>% 
+  merge(Motifs, by = "v2_mori1motif", all.x = T)
+
+paged_table(Dpl.data)
+```
+
+
+```{r,echo = FALSE, message=FALSE}
+library(survey)
+library(questionr)
+library(gtsummary)
+
+Dpl.data.Ind <- Dpl.data %>%
+  distinct(ident_ind, .keep_all = TRUE) %>%
+  mutate(sexe = ifelse(sexe == 1, "male", "female"))
+
+dw <- svydesign(ids = ~ident_ind,
+                data = Dpl.data.Ind,
+                weights =  ~pondki)
+
+dw <- update( dw , age = factor(age) )
+
+tab <- svytable(~ sexe + motifs, dw)
+
+
+dw %>%
+  tbl_svysummary(
+    include = c("age", "sexe"),
+    by = "sexe"
+  ) %>%
+  add_overall(last = TRUE) %>%
+  add_p()
+
+ggplot(dw$variables) +
+  aes(weight = weights(dw), x = age, group = sexe,  fill = sexe) + 
+  geom_histogram(aes(color = sexe, fill = sexe),
+                         alpha = 0.4, position = "identity", stat = "count") +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800")) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800"))+
+  theme_minimal() +
+  ylab("") +
+  xlab("age") +
+  theme(legend.position="top") + 
+  scale_x_discrete(breaks=c(seq(5,90,5))) +
+  labs(title = "Weighted")
+
+ggplot(dw$variables) +
+  aes( x = age, group = sexe,  fill = sexe) + 
+  geom_histogram(aes(color = sexe, fill = sexe),
+                         alpha = 0.4, position = "identity", stat = "count") +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800")) +
+  scale_color_manual(values = c("#00AFBB", "#E7B800"))+
+  theme_minimal() +
+  ylab("") +
+  xlab("age") +
+  theme(legend.position="top") + 
+  scale_x_discrete(breaks=c(seq(5,90,5)))+
+  labs(title = "Not Weighted")
+
+
+
+```
+
+## Representativeness of the popultaion in the ENTD
+
+### French population in 2008 
+
+Source : INSEE
+Champ : France métropolitaine
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+Pop2008 = read_xlsx("/Users/Pierre/Desktop/Academic/M2 - Modelisation/Stage/estim-pop-dep-sexe-aq-1975-2021.xlsx", sheet = "2008", skip = 2) 
+names(Pop2008) <- substr(names(Pop2008),1,nchar(names(Pop2008))-8)
+names(Pop2008) <- gsub(" à ", '-', names(Pop2008))
+names(Pop2008) <- gsub(" ans et p", '+', names(Pop2008))
+
+Pop2008 <- Pop2008[,-2]
+
+colnames(Pop2008) <- ifelse(Pop2008[1,] == "Hommes",
+                            paste("H", colnames(Pop2008), sep = "_"),
+                            paste("F", colnames(Pop2008), sep = "_"))
+
+```
+
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+Pop2008.ALL = Pop2008 %>% filter(Pop2008 == "France métropolitaine" |
+           F_Dépa == "Départements" ) %>%
+  gather(key = "Age", value = "value", -F_Dépa) %>%
+  mutate(sexe = lag(value, 1)) %>%
+  na.omit() %>%
+  filter(F_Dépa == "France métropolitaine") %>%
+  mutate(Age = substr(Age,3, nchar(Age)),
+         Age = gsub(" ",  "", Age),
+         Age = ifelse(Age == "To", NA, Age),
+         factor = substr(Age, 1,2),
+         factor = gsub("[^[:alnum:]]", "", factor),
+         factor = as.numeric(factor),
+         INSEE = value) %>%
+  na.omit() %>%
+  select(-F_Dépa, -value)
+
+
+Pop2008.ALL %>% 
+  group_by(Age, factor) %>% 
+  summarise(INSEE = sum(as.numeric(INSEE))) %>% 
+  ungroup() %>% 
+  mutate(freq = INSEE/sum(INSEE)) %>% 
+  ggplot(aes(x= reorder(Age, factor), y = freq)) + geom_bar( stat = "identity")+
+  xlab("") +
+  ylab("") +
+  theme_minimal()
+
+```
+
+### Weighting
+
+#### Weight of the day
+
+POIDS_JOUR est un poids de niveau déplacement, à utiliser si l'on veut raisonner sur l'ensemble
+de la semaine et obtenir, notamment des totaux hebdomadaires. Il est basé sur le poids du Kish
+PONDKI.
+
+
+ |
+-----|----------
+5 x pondki | Déplacement un jour de semaine, du lundi au vendredi
+0 | Déplacement un jour de semaine mais hors jour de référence (à ne pas prendre en compte)
+2 x pondki| Déplacement un jour de week-end (hors IDF et Pays de Loire, le kish s’est déplacé le samedi ET le dimanche)
+1 x pondki | Déplacement un jour de week-end (hors IDF et Pays de Loire, le kish s’est déplacé le samedi OU le dimanche)
+1 x pondki | Déplacement un jour de week-end (IDF et Pays de Loire)
+
+## Total mileage distribution `r emo::ji("France")`
+
+```{r, fig.width=12, fig.height=10, message= FALSE, echo = FALSE}
+library(srvyr)
+
+Dpl.data.Ind <- Dpl.data.Ind %>% 
+  filter(poids_jour != 0)
+
+dw2 <- svydesign(ids = ~ident_ind,
+                data = Dpl.data.Ind,
+                weights =  ~poids_jour)
+
+dw2 <- update( dw2 , age = factor(age) )
+
+
+dw2 %>%
+  tbl_svysummary(
+    include = c("sexe", "motifs"),
+    by = "sexe"
+  ) %>%
+  add_overall(last = TRUE) %>%
+  add_p()
+
+
+#Ponderation à la journée, division de poids_jour par 7 
+
+Dpl.data.active =  Dpl.data %>% 
+  filter(v2_mtp ==1.10 | v2_mtp == 2.2) %>%
+  mutate(poids_jour = poids_jour/7,
+         Mode = ifelse(v2_mtp == 1.1, "Walking", "Cycling"),
+         age_grp = age_groups(age, split_at = c(seq(5,100,5)), na.rm = FALSE),
+         distance = v2_mdisttot * poids_jour) %>%
+  group_by(age_grp, sexe, Mode, v2_mtp) %>%
+  summarise(distance = sum(distance, na.rm = T)) %>%
+  ungroup() %>% 
+  group_by(Mode) %>% 
+  mutate(freq = distance/sum(distance))
+            
+```
+
+### Visualization of the distribution {.tabset}
+
+#### Cycling
+
+```{r, echo = FALSE}
+p1 = Dpl.data.active %>% 
+  filter(Mode == "Cycling") %>%
+  ggplot() + 
+  geom_bar(aes(x = as.factor(sexe), y = freq, fill = as.factor(sexe) ), stat="identity") +
+  facet_wrap(~age_grp, nrow = 1) +
+  ylab("") +
+  xlab("") +
+  labs(title = "Vélo") +
+  theme(legend.title = element_blank(),
+        legend.position = "top")+ 
+  scale_fill_discrete( labels = c("Hommes", "Femmes"))+
+  scale_y_continuous(limits = c(0,0.11), expand = c(0, 0))+ 
+  theme(axis.ticks.x = element_blank(),
+        axis.text.x = element_blank())
+p1
+```
+
+
+#### Walking
+
+```{r, echo = FALSE}
+p2 = Dpl.data.active %>% filter(Mode == "Walking") %>%
+  ggplot() + 
+  geom_bar(aes(x = as.factor(sexe), y =freq, fill =as.factor(sexe) ), stat="identity") +
+  facet_wrap(~age_grp, nrow = 1) +
+  ylab("") +
+  xlab("") +
+  labs(title = "Marche") +
+  theme(legend.title = element_blank(),
+        legend.position = "top")+ 
+  scale_fill_discrete( labels = c("Hommes", "Femmes")) +
+  scale_y_continuous(limits = c(0,0.06), expand = c(0, 0))+ 
+  theme(axis.ticks.x = element_blank(),
+        axis.text.x = element_blank())
+p2
+```
+
+
+# Scenarios
+
+
+## The Danish cycling culture
+In addition to the increase in total walking and cycling volumne, we believe that the distribution of kilometres walked and biked among population age classes will evolute as well. Scenarios of energy transition anticipate an overall increase in total cycling volume, but understanding how the total amount of kilometers is distributed among the population is crucial as mortality reduction fluctutaes depending on age and gender. 
+Therefore, we decided to gradually change to current French mileage distribution to reach the Danish one by 2050.
+The cyling culture in Denmark is one of th best in the world. On average, Danes cycle 1.6km per day @DanishCyclingStatistics, which results to a volume of 42 minutes a week (using an average cycling speed of 16km/h @CyclingInfrastructureEconomic2019). In the capital city Copenhagen, it is almost as doubled as individuals cycle about 79 miutes per week. 
+The appealing aspect of using the Danish model as an objective is its evolution over the past decades. Similarly to the exeptional increase in bike usage that has started with the COVID-19 pandemic, the cycling revolution in Denmark started with a global crisis with the first oil shock in the 1970's @DanishCyclingHistory. Then with the help of succesful public policies, the increae in bike usage among the Danes has kept increasing over the years 
+
+
+## Total mileage distribution `r emo::ji("Denmark")`
+
+The data on mobility in Denmark were collected through the Danish National Travel Survey (TU), and processed by Center for Transport Analytics at the Technical University of Denmark. 
+
+Similarly to the French Tranportaion survey, the TU takes into account trips purposed for leisure activity. We believe that those trips can bias our results as the change in using bycicles for leisure is less affected by public policies in comparion as cycling for commuting. Combining all modes of transportation, lesisure activty accounts ofr 41% of all 2018 mileage @MainResultsCenter, and for cycling, it represents 36% of all trip purposes @MainResultsCenter. 
+
+We used the collection of the annual surveys from 2016 to 2019 to increase the representativeness of the Danish population.
+The data is presented below: 
+
+
+```{r, echo = FALSE}
+Data.Denmark = read_xlsx("/Users/Pierre/Desktop/Academic/M2 - Modelisation/Stage/Data_Denmark.xlsx") %>%
+  mutate(age_grp = paste0(minRespAgeCorrect,"-", maxRespAgeCorrect)) %>%
+  select(c(Period, RespSex, N:age_grp)) %>%
+  pivot_longer(!c(Period, RespSex, N,age_grp),
+               names_to = "type",
+               values_to = "value") %>%
+  mutate(type = ifelse(type == "WalkLen_pers_day", "Walking", "Total_Cycling"),
+         Sexe = ifelse(RespSex == 1, "Male", "Female")) %>%
+  select(-RespSex)
+```
+
+```{r, echo = FALSE}
+Data.Denmark.distribution = Data.Denmark %>% 
+  group_by(type, Period) %>%
+  mutate(freq = value/sum(value)) 
+
+ Data.Denmark.distribution %>% 
+  filter(Period == 2) %>%
+   arrange(type) %>% 
+  select(-Period,age_grp, Sexe, N, type, freq) %>%
+  kbl( caption = "Distribution of active mobility") %>%
+  kable_paper("striped", full_width = F) %>%
+  pack_rows("Cycling", 1, 30) %>%
+  pack_rows("Walking", 31, 40)
+
+```
+
+
+### Visualization {.tabset}
+
+#### Cycling
+
+```{r, echo=FALSE}
+p1 =Data.Denmark.distribution %>%
+  filter(type != "Walking" & Period == 2) %>%
+  ggplot() + geom_bar(aes(x = Sexe, y = freq, fill = Sexe), stat = "identity") +
+  facet_wrap(~age_grp, nrow = 1) +
+  ylab("") +
+  xlab("") +
+  theme(legend.position="",
+        axis.text.x = element_text(angle = 45))
+
+p1
+```
+
+#### Walking
+
+```{r, echo=FALSE}
+p2 =Data.Denmark.distribution %>%
+  filter(type == "Walking" & Period == 2) %>%
+  ggplot() + geom_bar(aes(x = Sexe, y = freq, fill = Sexe), stat = "identity") +
+  facet_wrap(~age_grp, nrow = 1) +
+  ylab("") +
+  xlab("") +
+  theme(legend.position="",
+        axis.text.x = element_text(angle = 45))
+
+p2
+
+```
+
+### Evolution of the distribution {.tabset}
+2007-2010 ⟶ 2016-2019
+
+#### Cycling
+```{r, echo = FALSE}
+Data.Denmark.distribution %>%
+  mutate(group = paste(age_grp, Sexe),
+         Period = ifelse(Period == 1, "2007-2010", "2016-2019")) %>%
+  filter(type == "Total_Cycling") %>%
+  ggplot() + geom_bar(aes(x = as.factor(Period),
+                          y = freq,
+                          fill = Sexe ),
+                      stat = "identity") +
+  facet_grid(Sexe ~ age_grp) +
+ scale_y_continuous(limits = c(0,0.065), expand = c(0, 0))+
+  ylab("") +
+  xlab("") +
+  theme(legend.position="",
+        axis.text.x = element_text(angle = 90))
+  
+```
+
+#### Walking
+
+```{r, echo = FALSE}
+Data.Denmark.distribution %>%
+  mutate(group = paste(age_grp, Sexe),
+         Period = ifelse(Period == 1, "2007-2010", "2016-2019")) %>%
+  filter(type == "Walking") %>%
+  ggplot() + geom_bar(aes(x = as.factor(Period),
+                          y = freq,
+                          fill = Sexe ),
+                      stat = "identity") +
+  facet_grid(Sexe ~ age_grp) +
+ scale_y_continuous(limits = c(0,0.055), expand = c(0, 0))+
+  ylab("") +
+  xlab("") +
+  theme(legend.position="",
+        axis.text.x = element_text(angle = 90))
+  
+```
+
+
+## Evolution des distributions d’âge de l’activité physique
+
+Pour chaque scénario (à évaluer) de montée en charge des transports actifs, il y a 2 éléments qui diffèrent par rapport au scénario de base servant à la comparaison (nb : en effet la structure démographique ou les taux de mortalité à appliquer restent les mêmes entre les scénarii de base et à évaluer) :
+
+  * Le niveau absolu d’activité physique global $B_t$, qui varie en fonction du temps t. 
+  * La distribution relative de ce niveau global entre les classes d’âges, qui peut ou non varier dans le temps : $p(a,t)$, et qui respecte  $\sum_{a}p(a,t)=1$ quel que soit $t$
+
+L’horizon temporel de l’évaluation est défini, 2050.
+
+Si on fait l’hypothèse d’une variation dans les niveaux et dans la distribution d’âge de l’activité physique, alors il faut définir une distribution cible p_c (par exemple celle des Pays-Bas) à atteindre pour une année ciblée $t_c$, 2050 ou avant :
+$p(a,t_c )= p_c (a)$
+
+La distribution initiale d’âge est notée $p(a,t_0)$.
+
+Pour tout t tel que  $t_0<t<t_c$, on peut faire l’hypothèse que la distribution d’âge intermédiaire est définie de façon suivante :
+
+
+$$p(a,t)=p(a,t_0 )+(p_c (a)-p(a,t_0 ))×\frac{(t-t_0)}{(t_c-t_0)} $$
+
+
+C’est cette distribution relative, variable dans le temps, qui sera utilisée chaque année pour ventiler le niveau global absolu d’activité physique global $B_t$ , lui aussi variable dans le temps.
+
+## Scenario I: Target Denmark 2035
+```{r}
+Scenario.DenI = Dpl.data.active %>% 
+  mutate(Sexe = ifelse(sexe == 1, "Male", "Female"),
+         Type = ifelse(v2_mtp == 1.1, "Walking", "Total_Cycling"),
+         Y.2008 = freq) %>% 
+  select(age_grp,Sexe, Type, Y.2008) %>%
+  merge(Data.Denmark.distribution,
+        by.x = c("age_grp", "Type", "Sexe"),
+        by.y = c("age_grp", "type", "Sexe")) %>%
+  filter(Period == 2) %>%
+  mutate(Y.2050 = freq) %>%
+  select(!c(freq))%>%
+ pivot_longer(cols = starts_with("Y"),
+              names_to = "Year",
+              values_to = "freq") %>%
+  mutate(Year = gsub("Y.","", Year),
+         Year = as.numeric(Year)) %>%
+  select(age_grp, Type, Sexe, Year, freq)%>%
+  group_by(age_grp, Sexe, Type) %>%
+  slice(rep(1:n(), each = 42))%>%
+  mutate(id = row_number(),
+         id = Year - 1 + id,
+         id = ifelse(Year == 2050, 2050, id),
+         freq = ifelse(Year != id, NA, freq),
+         Year = id)%>%
+filter(Year <= 2050) %>%
+select(-id) %>%
+  distinct() %>%
+  mutate(freq = ifelse(Year >= 2035,last(freq), freq )) %>%
+  mutate(Hypo = ifelse(Year < 2035,
+    first(freq) + (last(freq) - first(freq))*( (Year - first(Year)) / (2034 - first(Year)) ),
+    freq)) %>%
+  merge(negaWatt.data, by = c("Year", "Type")) %>%
+  mutate(Adjusted.distri = Hypo * value)
+
+# Adjusted.distri = Yearly mileage par classe d'age
+
+```
+### Pojection {.tabset}
+
+#### Walking
+```{r, fig.width=9, fig.height=6, message=FALSE, warning=FALSE}
+
+Scenario.DenI %>% 
+  filter(Type == "Walking" & Year >= 2020 & Sexe == "Male") %>%
+  group_by(age_grp, Year) %>%
+  ggplot() + 
+  geom_bar(aes(x = Year,
+               y = Hypo,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Male") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+
+Scenario.DenI %>% 
+  filter(Type == "Walking" & Year >= 2020 & Sexe == "Female") %>%
+  group_by(age_grp, Year) %>%
+  ggplot() + 
+  geom_bar(aes(x = Year,
+               y = Hypo,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Female") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+
+```
+
+
+#### Cycling
+```{r, fig.width=9, fig.height=6, message=FALSE, warning=FALSE}
+Scenario.DenI %>% 
+  filter(Type == "Total_Cycling" & Year >= 2020 & Sexe == "Male") %>%
+  group_by(age_grp, Year) %>%
+  ggplot() + 
+  geom_bar(aes(x = Year,
+               y = Hypo,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Male") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+
+Scenario.DenI %>% 
+  filter(Type == "Total_Cycling" & Year >= 2020 & Sexe == "Female") %>%
+  group_by(age_grp, Year) %>%
+  ggplot() + 
+  geom_bar(aes(x = Year,
+               y = Hypo,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Female") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+```
+
+## Scenario II: Target Denmark 2050
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+Scenario.DenII = Dpl.data.active %>% 
+  group_by(v2_mtp) %>%
+  mutate(Sexe = ifelse(sexe == 1, "Male", "Female"),
+         Type = ifelse(v2_mtp == 1.1, "Walking", "Total_Cycling"),
+         Y.2008 = freq) %>% 
+  select(age_grp,Sexe, Type, Y.2008) %>%
+  merge(Data.Denmark.distribution,
+        by.x = c("age_grp", "Type", "Sexe"),
+        by.y = c("age_grp", "type", "Sexe")) %>%
+  filter(Period == 2) %>%
+  mutate(Y.2050 = freq) %>%
+  select(!c(freq))%>%
+ pivot_longer(cols = starts_with("Y"),
+              names_to = "Year",
+              values_to = "freq") %>%
+  mutate(Year = gsub("Y.","", Year),
+         Year = as.numeric(Year)) %>%
+  select(age_grp, Type, Sexe, Year, freq) %>%
+  group_by(age_grp, Sexe, Type) %>%
+  slice(rep(1:n(), each = 42)) %>%
+  mutate(id = row_number(),
+         id = Year - 1 + id,
+         id = ifelse(Year == 2050, 2050, id),
+         freq = ifelse(Year != id, NA, freq),
+         Year = id) %>%
+  select(-id) %>%
+  distinct() %>%
+  filter(Year <= 2050) %>%
+  mutate(Hypo = first(freq) + (last(freq) - first(freq))*( (Year - first(Year)) / (last(Year) - first(Year)) ))%>%
+  merge(negaWatt.data, by = c("Year", "Type")) %>%
+  mutate(Adjusted.distri = Hypo * value)
+  
+```
+
+### Pojection {.tabset}
+
+#### Walking
+```{r, fig.width=9, fig.height=6, message=FALSE, warning=FALSE}
+
+Scenario.DenII %>% 
+  filter(Type == "Walking" & Year >= 2020 & Sexe == "Male") %>%
+  group_by(age_grp, Year) %>%
+  ggplot() + 
+  geom_bar(aes(x = Year,
+               y = Hypo,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Male") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+
+Scenario.DenII %>% 
+  filter(Type == "Walking" & Year >= 2020 & Sexe == "Female") %>%
+  group_by(age_grp, Year) %>%
+  ggplot() + 
+  geom_bar(aes(x = Year,
+               y = Hypo,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Female") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+
+```
+
+
+#### Cycling
+```{r, fig.width=9, fig.height=6, message=FALSE, warning=FALSE}
+Scenario.DenII %>% 
+  filter(Type == "Total_Cycling" & Year >= 2020 & Sexe == "Male") %>%
+  group_by(age_grp, Year) %>%
+  ggplot() + 
+  geom_bar(aes(x = Year,
+               y = Hypo,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Male") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+
+Scenario.DenII %>% 
+  filter(Type == "Total_Cycling" & Year >= 2020 & Sexe == "Female") %>%
+  group_by(age_grp, Year) %>%
+  ggplot() + 
+  geom_bar(aes(x = Year,
+               y = Hypo,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Female") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+```
+
+## Scenario III: Equally distributed mileage by 2035
+
+In this scenario, we evaluate the patway as the the government had as target to equally ditribute the total walking and cycling mileage among age categories in respect with the population pyramid by 2035.
+
+```{r}
+
+  
+
+Scenario.EqualI = Dpl.data.active %>% 
+  group_by(v2_mtp) %>%
+  mutate(Sexe = ifelse(sexe == 1, "Male", "Female"),
+         Type = ifelse(v2_mtp == 1.1, "Walking", "Total_Cycling"),
+         Y.2008 = freq) %>% 
+  select(age_grp,Sexe, Type, Y.2008) %>%
+  ungroup() %>% 
+  slice(rep(1:n(), each = 43)) %>%
+  group_by(Sexe, Type, age_grp) %>% 
+  mutate(year = row_number()+2007) %>% 
+  filter(year <= 2050) %>% 
+  merge(Pop.proj.cat, by.x = c("year","age_grp", "Sexe"), by.y = c("year","age_grp", "sexe"), all.x = T) %>% 
+  merge(negaWatt.data, by.x = c("year", "Type") ,by.y = c("Year", "Type")) %>% 
+  group_by(Type, year) %>% 
+  mutate(freq = Pop/sum(Pop),
+         names = paste0("Y.",year)) %>%
+  mutate(freq = ifelse(year > 2020 & year < 2035, NA, freq)) %>%
+  filter(year >= 2020) %>%
+  group_by(age_grp, Sexe, Type) %>%
+  mutate(grp = ifelse(year <= 2035, 1, 0)) %>%
+    group_by(age_grp, Sexe, Type, grp) %>%
+  mutate(Hypo =  first(freq) + (last(freq) - first(freq))*( (year - first(year)) / (2035 - first(year)) )) %>%
+  mutate(freq = ifelse(is.na(freq) == T & grp == 1, Hypo, freq ), 
+    Adjusted.distri = freq * value) %>%
+  filter(age_grp != "100+")
+
+Scenario.EqualII = Dpl.data.active %>% 
+  group_by(v2_mtp) %>%
+  mutate(Sexe = ifelse(sexe == 1, "Male", "Female"),
+         Type = ifelse(v2_mtp == 1.1, "Walking", "Total_Cycling"),
+         Y.2008 = freq) %>% 
+  select(age_grp,Sexe, Type, Y.2008) %>%
+  ungroup() %>% 
+  slice(rep(1:n(), each = 43)) %>%
+  group_by(Sexe, Type, age_grp) %>% 
+  mutate(year = row_number()+2007) %>% 
+  filter(year <= 2050) %>% 
+  merge(Pop.proj.cat, by.x = c("year","age_grp", "Sexe"), by.y = c("year","age_grp", "sexe"), all.x = T) %>% 
+  merge(negaWatt.data, by.x = c("year", "Type") ,by.y = c("Year", "Type")) %>% 
+  group_by(Type, year) %>% 
+  mutate(freq = Pop/sum(Pop),
+         names = paste0("Y.",year)) %>%
+  mutate(freq = ifelse(year > 2020 & year < 2050, NA, freq)) %>%
+  filter(year >= 2020) %>%
+    group_by(age_grp, Sexe, Type) %>%
+  mutate(Hypo =  first(freq) + (last(freq) - first(freq))*( (year - first(year)) / (last(year) - first(year)) )) %>%
+  mutate(Adjusted.distri = Hypo * value) %>%
+  filter(age_grp != "100+")
+```
+
+### Pojection {.tabset}
+
+Scenario.Equal1
+
+#### Walking
+```{r, fig.width=9, fig.height=6, message=FALSE, warning=FALSE}
+
+Scenario.EqualI %>% 
+  filter(Type == "Walking" & year >= 2020 & Sexe == "Male") %>%
+  group_by(age_grp, year, Sexe, Type) %>%
+  summarise(freq = sum(freq)) %>% 
+  ggplot() + 
+  geom_bar(aes(x = year,
+               y = freq,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Male") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+
+Scenario.EqualI %>% 
+  filter(Type == "Walking" & year >= 2020 & Sexe == "Female") %>%
+group_by(age_grp, year, Sexe, Type) %>%
+  summarise(freq = sum(freq)) %>% 
+  ggplot() + 
+  geom_bar(aes(x = year,
+               y = freq,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Female") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+
+```
+
+
+#### Cycling
+```{r, fig.width=9, fig.height=6, message=FALSE, warning=FALSE}
+Scenario.EqualI %>% 
+  filter(Type == "Total_Cycling" & year >= 2020 & Sexe == "Male") %>%
+  group_by(age_grp, year, Sexe, Type) %>%
+  summarise(freq = sum(freq)) %>% 
+  ggplot() + 
+  geom_bar(aes(x = year,
+               y = freq,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Male") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+
+Scenario.EqualI %>% 
+  filter(Type == "Total_Cycling" & year >= 2020 & Sexe == "Female") %>%
+  group_by(age_grp, year, Sexe, Type) %>%
+  summarise(freq = sum(freq)) %>% 
+  ggplot() + 
+  geom_bar(aes(x = year,
+               y = freq,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Female") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+```
+
+### Pojection {.tabset}
+
+Scenario.EqualII
+
+#### Walking
+```{r, fig.width=9, fig.height=6, message=FALSE, warning=FALSE}
+
+Scenario.EqualII %>% 
+  filter(Type == "Walking" & year >= 2020 & Sexe == "Male") %>%
+group_by(age_grp, year, Sexe, Type) %>%
+  summarise(Hypo = sum(Hypo)) %>% 
+  ggplot() + 
+  geom_bar(aes(x = year,
+               y = Hypo,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Male") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+
+Scenario.EqualII %>% 
+  filter(Type == "Walking" & year >= 2020 & Sexe == "Female") %>%
+group_by(age_grp, year, Sexe, Type) %>%
+  summarise(Hypo = sum(Hypo)) %>% 
+  ggplot() + 
+  geom_bar(aes(x = year,
+               y = Hypo,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Female") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+
+```
+
+
+#### Cycling
+```{r, fig.width=9, fig.height=6, message=FALSE, warning=FALSE}
+Scenario.EqualII %>% 
+  filter(Type == "Total_Cycling" & year >= 2020 & Sexe == "Male") %>%
+group_by(age_grp, year, Sexe, Type) %>%
+  summarise(Hypo = sum(Hypo)) %>% 
+  ggplot() + 
+  geom_bar(aes(x = year,
+               y = Hypo,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Male") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+
+Scenario.EqualII %>% 
+  filter(Type == "Total_Cycling" & year >= 2020 & Sexe == "Female") %>%
+group_by(age_grp, year, Sexe, Type) %>%
+  summarise(Hypo = sum(Hypo)) %>% 
+  ggplot() + 
+  geom_bar(aes(x = year,
+               y = Hypo,
+               fill = age_grp),
+           position="stack",
+           stat="identity",
+                  width = 0.5,
+           lwd = 1,
+           colour = "white") +
+    labs(title = "Female") +
+  xlab("") +
+  ylab("") +
+  theme_minimal()+
+  theme(legend.position="right")
+```
+
+
+
+# Results
+
+## Mortality rate 
+
+### Scenario.DenI
+```{r message=FALSE, warning=FALSE, results= "hide", echo=FALSE}
+# All data 
+
+All.data.DenI = Mortality.rate.projection.age %>%
+  merge(Pop.proj,
+        by.x = c("sexe", "age", "Year"),
+        by.y = c("sexe", "age", "year")) %>%
+  filter(age > 0 ) %>%
+  mutate(age_grp = age_groups(age, 1:20 * 5)) %>%
+  merge(Scenario.DenI,
+        by.x = c("sexe", "age_grp", "Year"),
+        by.y = c("Sexe", "age_grp", "Year"))%>% 
+  group_by(sexe, age_grp, Year, Mortality.rate, Type,Adjusted.distri ) %>% 
+  summarise(Pop = sum(Pop))%>%
+  select(sexe, age_grp, Year, Mortality.rate, Pop, Type, Adjusted.distri)%>% 
+  mutate(Type = ifelse(Type == "Total_Cycling", "cycling", "walking"),
+         volume =  Adjusted.distri,
+    HEAT =  HEAT_country(type = Type,
+             volume = volume,
+             Population = Pop,
+             Mortality_Rate = Mortality.rate))
+
+All.data.DenI.table = All.data.DenI %>% 
+  group_by(sexe, Type, Year, age_grp) %>%
+  summarise(HEAT = sum(HEAT)) %>% 
+  pivot_wider( names_from = Year, values_from = HEAT) %>% 
+  mutate("2021-2030" = rowSums(across("2021":"2030")),
+         "2031-2040" = rowSums(across("2031":"2040")),
+         "2041-2050" = rowSums(across("2041":"2050")),
+         "2021-2050" = rowSums(across("2021":"2050")),
+         "Avr per year" = round(rowMeans(across("2021":"2050"))),
+         Avr_per_year = round(rowMeans(across("2021":"2050"))))
+
+```
+
+
+
+```{r}
+All.data.DenI.table %>% 
+  select(sexe, Type, age_grp,"2021-2030":"Avr per year" ) %>% 
+  filter(Type == "walking") %>% 
+  select(-Type) %>% 
+  kbl() %>%
+  kable_styling()
+
+All.data.DenI.table %>% 
+  select(sexe, Type, age_grp,"2021-2030":"Avr per year" ) %>% 
+  filter(Type == "cycling") %>% 
+  select(-Type) %>% 
+  kbl() %>%
+  kable_styling()
+```
+
+### Scenario.DenII
+```{r message=FALSE, warning=FALSE, results= "hide"}
+# All data 
+
+All.data.DenII = Mortality.rate.projection.age %>%
+  merge(Pop.proj,
+        by.x = c("sexe", "age", "Year"),
+        by.y = c("sexe", "age", "year")) %>%
+  filter(age > 0 ) %>%
+  mutate(age_grp = age_groups(age, 1:20 * 5)) %>%
+  merge(Scenario.DenII,
+        by.x = c("sexe", "age_grp", "Year"),
+        by.y = c("Sexe", "age_grp", "Year")) %>% 
+  group_by(sexe, age_grp, Year, Mortality.rate, Type,Adjusted.distri ) %>% 
+  summarise(Pop = sum(Pop))%>%
+  group_by(sexe, age_grp, Year, Mortality.rate, Type,Adjusted.distri ) %>% 
+  summarise(Pop = sum(Pop))%>%
+  select(sexe, age_grp, Year, Mortality.rate, Pop, Type, Adjusted.distri) %>% 
+  mutate(Type = ifelse(Type == "Total_Cycling", "cycling", "walking"),
+         volume = Adjusted.distri,
+    HEAT =  HEAT_country(type = Type,
+             volume = volume,
+             Population = Pop,
+             Mortality_Rate = Mortality.rate))
+
+All.data.DenII.table = All.data.DenII %>%
+  group_by(sexe, Type, Year, age_grp) %>%
+  summarise(HEAT = sum(HEAT)) %>% 
+  pivot_wider( names_from = Year, values_from = HEAT) %>% 
+  mutate("2021-2030" = rowSums(across("2021":"2030")),
+         "2031-2040" = rowSums(across("2031":"2040")),
+         "2041-2050" = rowSums(across("2041":"2050")),
+         "2021-2050" = rowSums(across("2021":"2050")),
+         "Avr per year" = round(rowMeans(across("2021":"2050"))),
+         Avr_per_year = round(rowMeans(across("2021":"2050"))))
+  
+
+```
+
+```{r}
+All.data.DenII.table %>% 
+  select(sexe, Type, age_grp,"2021-2030":"Avr per year" ) %>% 
+  filter(Type == "walking") %>% 
+  select(-Type) %>% 
+  kbl() %>%
+  kable_styling()
+
+All.data.DenII.table %>% 
+  select(sexe, Type, age_grp,"2021-2030":"Avr per year" ) %>% 
+  filter(Type == "cycling") %>% 
+  select(-Type) %>% 
+  kbl() %>%
+  kable_styling()
+```
+
+### Scenario.EqualI
+```{r message=FALSE, warning=FALSE, results= "hide"}
+# All data 
+
+Scenario.EqualI.HEAT = Mortality.rate.projection.age %>%
+  merge(Pop.proj,
+        by.x = c("sexe", "age", "Year"),
+        by.y = c("sexe", "age", "year")) %>%
+  filter(age > 0 )%>%
+  mutate(age_grp = age_groups(age, 1:20 * 5)) %>%
+    select(-c(Pop, Change))%>% 
+  merge(Scenario.EqualI, by.x = c("sexe", "age_grp", "Year"), by.y = c("Sexe", "age_grp", "year"))%>% 
+  select(-c(age.x,age.y)) %>% 
+  distinct() %>% 
+  select(sexe, age_grp, Year, Mortality.rate, Pop, Type, Adjusted.distri) %>% 
+  mutate(Type = ifelse(Type == "Total_Cycling", "cycling", "walking"),
+         volume = Adjusted.distri,
+    HEAT =  HEAT_country(type = Type,
+             volume = volume,
+             Population = Pop,
+             Mortality_Rate = Mortality.rate)) 
+
+Scenario.EqualI.HEAT.table = Scenario.EqualI.HEAT %>%
+  group_by(sexe, Type, Year, age_grp) %>%
+  summarise(HEAT = sum(HEAT)) %>% 
+  pivot_wider( names_from = Year, values_from = HEAT) %>% 
+  mutate("2021-2030" = rowSums(across("2021":"2030")),
+         "2031-2040" = rowSums(across("2031":"2040")),
+         "2041-2050" = rowSums(across("2041":"2050")),
+         "2021-2050" = rowSums(across("2021":"2050")),
+         "Avr per year" = round(rowMeans(across("2021":"2050"))),
+         Avr_per_year = round(rowMeans(across("2021":"2050"))))%>% 
+  mutate(from  = substr(age_grp,1, 3),
+         from = gsub("-","",from ),
+         from = as.numeric(from))
+
+Scenario.EqualII.HEAT = Mortality.rate.projection.age %>%
+  merge(Pop.proj,
+        by.x = c("sexe", "age", "Year"),
+        by.y = c("sexe", "age", "year")) %>%
+  filter(age > 0 ) %>%
+  mutate(age_grp = age_groups(age, 1:20 * 5)) %>%
+    select(-c(Pop, Change))%>% 
+  merge(Scenario.EqualII, by.x = c("sexe", "age_grp", "Year"), by.y = c("Sexe", "age_grp", "year")) %>% 
+  select(-c(age.x,age.y)) %>% 
+  distinct() %>% 
+  select(sexe, age_grp, Year, Mortality.rate, Pop, Type, Adjusted.distri) %>% 
+  mutate(Type = ifelse(Type == "Total_Cycling", "cycling", "walking"),
+         volume = Adjusted.distri,
+    HEAT =  HEAT_country(type = Type,
+             volume = volume,
+             Population = Pop,
+             Mortality_Rate = Mortality.rate)) 
+
+Scenario.EqualII.HEAT.table = Scenario.EqualII.HEAT %>%
+  group_by(sexe, Type, Year, age_grp) %>%
+  summarise(HEAT = sum(HEAT)) %>% 
+  pivot_wider( names_from = Year, values_from = HEAT) %>% 
+  mutate("2021-2030" = rowSums(across("2021":"2030")),
+         "2031-2040" = rowSums(across("2031":"2040")),
+         "2041-2050" = rowSums(across("2041":"2050")),
+         "2021-2050" = rowSums(across("2021":"2050")),
+         "Avr per year" = round(rowMeans(across("2021":"2050"))),
+         Avr_per_year = round(rowMeans(across("2021":"2050"))))%>% 
+  mutate(from  = substr(age_grp,1, 3),
+         from = gsub("-","",from ),
+         from = as.numeric(from))
+
+```
+
+## Premature deaths avoided
+
+```{r}
+
+ggplot() + 
+  geom_line(data = subset(All.data.DenII.table, Type %in% c("cycling") & sexe %in% c("Male")),
+            aes(x = age_grp,y = -Avr_per_year,group = sexe,color = "Den II - Cycling - Male")) +
+  geom_line(data = subset(All.data.DenII.table, Type %in% c("cycling") & sexe %in% c("Female")),
+            aes(x = age_grp,y = -Avr_per_year,group = sexe,color = "Den II - Cycling - Female")) +
+  geom_line(data = subset(All.data.DenII.table, Type %in% c("walking") & sexe %in% c("Male")),
+            aes(x = age_grp,y = -Avr_per_year,group = sexe,color = "Den II - Walking - Male")) +
+  geom_line(data = subset(All.data.DenII.table, Type %in% c("walking") & sexe %in% c("Female")),
+            aes(x = age_grp, y = -Avr_per_year, group = sexe, color = "Den II - Walking - Female")) +
+   geom_line(data = subset(All.data.DenI.table, Type %in% c("cycling") & sexe %in% c("Male")),
+             aes(x = age_grp, y = -Avr_per_year, group = sexe, color = "Den I - Cycling - Male")) +
+  geom_line(data = subset(All.data.DenI.table, Type %in% c("cycling") & sexe %in% c("Female")), 
+            aes(x = age_grp, y = -Avr_per_year, group = sexe, color = "Den I - Cycling - Female")) +
+  geom_line(data = subset(All.data.DenI.table, Type %in% c("walking") & sexe %in% c("Male")), 
+            aes(x = age_grp, y = -Avr_per_year,group = sexe, color = "Den I - Walking - Male")) +
+  geom_line(data = subset(All.data.DenI.table, Type %in% c("walking") & sexe %in% c("Female")),
+            aes(x = age_grp, y = -Avr_per_year, group = sexe,color = "Den I - Walking - Female")) +
+  labs(color = "") +
+   ylab("Yearly average of premature deaths avoided") +
+  xlab("Age") +
+  theme_minimal()+
+    theme(axis.text.x = element_text(angle = 45))
+  
+```
+
+## Premature deaths avoided
+
+```{r}
+ggplot() + 
+  geom_line(data = subset(Scenario.EqualI.HEAT.table, Type %in% c("cycling") & sexe %in% c("Male")),
+            aes(x = age_grp,y = -Avr_per_year,group = sexe,color = "Equal I - Cycling - Male")) +
+  geom_line(data = subset(Scenario.EqualI.HEAT.table, Type %in% c("cycling") & sexe %in% c("Female")),
+            aes(x = age_grp,y = -Avr_per_year,group = sexe,color = "Equal I - Cycling - Female")) +
+  geom_line(data = subset(Scenario.EqualI.HEAT.table, Type %in% c("walking") & sexe %in% c("Male")),
+            aes(x = age_grp,y = -Avr_per_year,group = sexe,color = "Equal I - Walking - Male")) +
+  geom_line(data = subset(Scenario.EqualI.HEAT.table, Type %in% c("walking") & sexe %in% c("Female")),
+            aes(x = age_grp, y = -Avr_per_year, group = sexe, color = "Equal I - Walking - Female"))+
+   geom_line(data = subset(Scenario.EqualII.HEAT.table, Type %in% c("cycling") & sexe %in% c("Male")),
+             aes(x = age_grp, y = -Avr_per_year, group = sexe, color = "Equal II - Cycling - Male")) +
+  geom_line(data = subset(Scenario.EqualII.HEAT.table, Type %in% c("cycling") & sexe %in% c("Female")), 
+            aes(x = age_grp, y = -Avr_per_year, group = sexe, color = "Equal II - Cycling - Female"))+
+  geom_line(data = subset(Scenario.EqualII.HEAT.table, Type %in% c("walking") & sexe %in% c("Male")), 
+            aes(x = age_grp, y = -Avr_per_year,group = sexe, color = "Equal II - Walking - Male")) +
+  geom_line(data = subset(Scenario.EqualII.HEAT.table, Type %in% c("walking") & sexe %in% c("Female")),
+            aes(x = age_grp, y = -Avr_per_year, group = sexe,color = "Equal II - Walking - Female")) +
+  labs(color = "") +
+   ylab("Yearly average of premature deaths avoided") +
+  xlab("Age") +
+  theme_minimal()+
+    theme(axis.text.x = element_text(angle = 45))
+  
+```
+
+
+# Annex
+
+## Total mileage distribution `r emo::ji("Netherlands")`
+
+The MPN is an initiative by the KiM Netherlands Institute for Transport Policy Analysis.
+The following data comes from the MPN 2017.
+
+
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Data NL - age distribution 
+
+
+Rawdata <- read.spss("/Users/Pierre/Desktop/Academic/M2 - Modelisation/Stage/MPNWAVE5_DAGBOEKdata.sav",
+                  to.data.frame=TRUE)
+
+data = Rawdata%>% 
+  subset(HVM %in% c("Electric bicycle, e-bike",
+                           "Bicycle, racing bicycle",
+                           "Walking")) %>%
+  group_by(PERSID, HVM, VPLDAGNR ) %>%
+  summarise(distance = sum(AFSTV_ORG)) %>%
+  group_by(PERSID, HVM ) %>%
+  summarise(distance = mean(distance))
+
+Pdata <- read.spss("/Users/Pierre/Desktop/Academic/M2 - Modelisation/Stage/MPNWAVE5_Pdata.sav",
+                  to.data.frame=TRUE) %>% 
+  select(PERSID,KLEEFT2, GESLACHT) 
+
+All.data.NL = Pdata %>%
+  merge(data, by = "PERSID") %>%
+  mutate(KLEEFT2 = as.character(KLEEFT2),
+         age_grp = substr(KLEEFT2,1, nchar(KLEEFT2)-10),
+         age_grp = ifelse(age_grp == "80 years old", "80+", age_grp))
+
+All.data.NL.distance = All.data.NL %>%
+  group_by(GESLACHT, HVM, age_grp) %>%
+  summarise(distance = sum(distance)) %>%
+  ungroup() %>%
+    mutate(Type = ifelse(HVM == "Walking", "Walking", "Cycling"), distance = distance) %>%
+  group_by(Type) %>%
+  mutate(freq = distance/sum(distance))
+
+All.data.NL.freq = All.data.NL %>%
+  group_by(GESLACHT, age_grp) %>%
+  summarise(Type = ifelse(HVM == "Walking", "Walking", "Cycling"), distance = distance) %>%
+   group_by(GESLACHT, age_grp, Type) %>%
+  summarise(distance = sum(distance)) %>%
+   group_by(Type) %>%
+  mutate(freq = distance/sum(distance))
+
+```
+
+### Visualization {.tabset}
+
+#### Vélo
+
+```{r, echo=FALSE}
+p1 =All.data.NL.distance %>%
+  mutate(Sexe = GESLACHT,
+         Type = HVM) %>%
+  filter(Type != "Walking") %>%
+  ggplot() + geom_bar(aes(x = Sexe, y = freq, fill = Type), stat = "identity") +
+  facet_wrap(~age_grp, nrow = 1) +
+  ylab("") +
+  xlab("") +
+  theme(legend.position="top",
+        axis.text.x = element_text(angle = 45))
+
+p1
+```
+
+
+
+
+#### Marche
+
+```{r, echo=FALSE}
+p2 = All.data.NL.distance %>%
+  mutate(Sexe = GESLACHT,
+         Type = HVM) %>%
+  filter(Type == "Walking") %>%
+  ggplot() + geom_bar(aes(x = Sexe, y = freq, fill = Type), stat = "identity") +
+  facet_wrap(~age_grp, nrow = 1) +
+  ylab("") +
+  xlab("") +
+  theme(legend.position="top",
+        axis.text.x = element_text(angle = 45))
+
+p2
+```
+
+# References
+
+

@@ -29,8 +29,8 @@ want = c("dplyr",
          "foreign",
         "survey",
         "gtsummary",
-        "emo",
-         "kableExtra")
+         "kableExtra",
+        "writexl")
 
 have = want %in% rownames(installed.packages())
 
@@ -799,6 +799,8 @@ All.data.DenI.table = All.data.DenI %>%
          "2041-2049" = rowSums(across("2041":"2049")),
          "Avr per year" = round(rowMeans(across("2021":"2049"))),
          "Avr_per_year" = round(rowMeans(across("2021":"2049"))))
+
+write_xlsx(All.data.DenI.table, "All.data.DenI.xlsx")
 
 Graph_YearlyAvg_scenI =  ggplot() + 
   geom_line(data = subset(All.data.DenI.table, Type %in% c("cycling") & sexe %in% c("Male")),
