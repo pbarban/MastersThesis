@@ -30,7 +30,9 @@ want = c("dplyr",
         "survey",
         "gtsummary",
          "kableExtra",
-        "writexl")
+        "writexl",
+        "cowplot",
+        "gridExtra")
 
 have = want %in% rownames(installed.packages())
 
@@ -44,10 +46,10 @@ junk <- lapply(want, library, character.only = T)
 rm(have, want, junk)
 
 devtools::install_github('thomasp85/gganimate')
-library(gganimate)
+#library(gganimate)
 
 devtools::install_github("r-rust/gifski")
-library(gifski)
+#library(gifski)
 
 ```
 
@@ -89,16 +91,24 @@ From 2018 to 2050, the scenario describes an increase in the distance per cyclin
 ```{r,echo=FALSE}
 #négaWatt
 
-negaWatt.data <- read.csv("new_nw.csv", sep = ";") %>%
-  mutate(Type = ifelse(Type == "Marche", "Walking","Total_Cycling")) %>% 
+negaWatt.data <- read.csv("new_nw.csv", sep = ",")  %>%
+  mutate(Type = ifelse(Type == "Marche_an", "Walking",
+                       ifelse(Type =='Vélo_an', "Total_Cycling",
+                              Type)))%>% 
+filter(Type %in% c("Walking", "Total_Cycling")) %>% 
   pivot_longer(!Type, names_to = "Year",
-               values_to = "value")%>%
-  na.omit() %>% 
+               values_to = "value") %>% 
   mutate(Year = as.numeric(gsub("X", "", Year)),
-         value = as.numeric(value)) %>% 
-  filter(Year <= 2050 & Year >= 2015)
+         value = as.numeric(gsub(",", "", value))) %>% 
+  na.omit() %>% 
+  filter(Year <= 2050 & Year >= 2015) %>% 
+  mutate(
+  Volume = ifelse(Type == "Total_Cycling",
+                          ((value/14)*60)/52.5,
+                          ((value/4.8)*60)/52.5))
 
-saveRDS(negaWatt.data, "negaWatt.data.rds")
+negaWatt.data %>% select(-Volume) %>% 
+saveRDS(., "negaWatt.data.rds")
 
 p1 = negaWatt.data %>% 
 ggplot() +  
@@ -112,14 +122,14 @@ ggplot() +
         legend.title = element_blank(),
         legend.text = element_text( size = 10),
         legend.position="top",
-        axis.text=element_text(size=10))+
-  ylim(0, 1250)
+        axis.text=element_text(size=10))
 ```
 
 
 
 ```{r}
 p1
+
 ```
 
 # Demography Projection
@@ -215,25 +225,25 @@ PopPyramid <- PopPyramid +
      )
 
 
-PopPyramid <- PopPyramid + 
-  transition_states(year,
-                    transition_length = 1,
-                    state_length = 1) + 
-  enter_fade() +
-  exit_fade() + 
-  ease_aes('cubic-in-out')
+#PopPyramid <- PopPyramid + 
+ # transition_states(year,
+    #                transition_length = 1,
+    #                state_length = 1) + 
+  #enter_fade() +
+  #exit_fade() + 
+  #ease_aes('cubic-in-out')
 
 ```
 
 
 ```{r, echo = FALSE, warning = FALSE,message  = FALSE, eval = TRUE}
 
-animate(PopPyramid,
-        fps = 24,
-        duration = 20,
-        width = 500,
-        height = 500,
-        renderer = gifski_renderer("PopPyramid.gif"))
+#animate(PopPyramid,
+      #  fps = 24,
+      #  duration = 20,
+      #  width = 500,
+       # height = 500,
+       # renderer = gifski_renderer("PopPyramid.gif"))
 ```
 
 As shown by the graph above, we understand that the population will be older and the number of eldery will increase over the years.
@@ -329,25 +339,25 @@ Mortality.rate.plot <- Mortality.rate.plot +
        axis.title.x = element_text(size = 12,face = "bold"),
        plot.caption = element_text(size = 12, hjust = 0.5,face = "italic",color = "gray"))
 
-Mortality.rate.plot <- Mortality.rate.plot + 
-  transition_states(year,
-                    transition_length = 0.25,
-                    state_length = 0.25) + 
-  enter_fade() +
-  exit_fade() + 
-  ease_aes('cubic-in-out')
+#Mortality.rate.plot <- Mortality.rate.plot + 
+ # transition_states(year,
+ #                   transition_length = 0.25,
+ #                   state_length = 0.25) + 
+ # enter_fade() +
+ # exit_fade() + 
+ # ease_aes('cubic-in-out')
 
 ```
 
 
 
 ```{r, echo =FALSE}
-animate(Mortality.rate.plot,
-        fps = 24,
-        duration = 30,
-        width = 500,
-        height = 500,
-       renderer = gifski_renderer("Mortality.rate.plot.gif"))
+#animate(Mortality.rate.plot,
+       # fps = 24,
+       # duration = 30,
+       # width = 500,
+       # height = 500,
+      # renderer = gifski_renderer("Mortality.rate.plot.gif"))
 ```
 
 # French distribution of total walking and cyling mileage
@@ -359,7 +369,7 @@ unzip("k_deploc.zip")
 Dpl.Rawdata = read.dta("k_deploc.dta") %>%
   select(v2_mdisttot,v2_mmoy1s:v2_mmoy4s, ident_ind, v2_date_dep, poids_jour, v2_mtp, pondki, v2_mori1motif)
 
-unzip("Q_INDIVIDU.dta")
+unzip("q_individu.zip")
 
 ENTD.INDIVIDU.rawdata = read.dta("Q_INDIVIDU.dta") %>% 
   select(ident_men, ident_ind,sexe,age, noi)
@@ -372,12 +382,10 @@ Dpl.data = Dpl.Rawdata  %>%
 
 ```
 
-## Weighting of the survey
+## Weighting of the survey {.tabset}
 
-
+### Weighted
 ```{r}
-
-
 Dpl.data.Ind <- Dpl.data %>%
   distinct(ident_ind, .keep_all = TRUE) %>%
   mutate(sexe = ifelse(sexe == 1, "male", "female"))
@@ -397,7 +405,10 @@ ggplot(dw$variables) +
   xlab("age") +
   theme(legend.position="top") + 
   labs(title = "Weighted")
+```
 
+### Not Weighted
+```{r}
 ggplot(dw$variables) +
   aes( x = age, group = sexe,  fill = sexe) + 
   geom_histogram(aes(color = sexe, fill = sexe),
@@ -598,9 +609,13 @@ Scenario.DenI = Dpl.data.active %>%
   select(-id) %>%
   distinct() %>%
   filter(Year <= 2050) %>%
-  mutate(Hypo = first(freq) + (last(freq) - first(freq))*( (Year - first(Year)) / (last(Year) - first(Year)) ))%>%
-  merge(negaWatt.data, by = c("Year", "Type")) %>%
+  mutate(Hypo = first(freq) + (last(freq) - first(freq))*( (Year - first(Year)) / (last(Year) - first(Year)) )) %>%
+  merge(negaWatt.data, by = c("Year", "Type"))%>%
   mutate(Adjusted.distri = Hypo * value)
+
+Scenario.DenI %>% 
+  group_by(Year, Type) %>% 
+  summarise(sum(Hypo))
 
 ```
 
@@ -761,12 +776,16 @@ All.data.DenI = Pop.proj %>%
   merge(Scenario.DenI,
         by.x = c("sexe", "age_grp", "year"),
         by.y = c("Sexe", "age_grp", "Year")) %>% 
-  group_by(sexe, age_grp, year, Mortality.rate, Type,Adjusted.distri ) %>% 
-  summarise(Pop = sum(Pop))%>%
-  select(sexe, age_grp, year, Mortality.rate, Pop, Type, Adjusted.distri)%>% 
+  group_by(sexe, age_grp, year, Type,Adjusted.distri ) %>% 
+  summarise(Pop = sum(Pop),
+            Mortality.rate = mean(Mortality.rate)) %>%
+  select(sexe, age_grp, year, Mortality.rate, Pop, Type, Adjusted.distri) %>% 
   mutate(Type = ifelse(Type == "Total_Cycling", "cycling", "walking"),
-         volume =  Adjusted.distri,
-    HEAT =  HEAT_country(type = Type,
+         volume = ifelse(Type == "cycling",
+                          ((Adjusted.distri/14)*60)/52.5,
+                          ((Adjusted.distri/4.8)*60)/52.5),
+         volume = volume/Pop,
+         HEAT = HEAT_country(type = Type,
              volume = volume,
              Population = Pop,
              Mortality_Rate = Mortality.rate))
@@ -785,8 +804,8 @@ Graph_TotalperYear_scenI = All.data.DenI %>%
         axis.text.x = element_text(angle = 90))
 
 Graph_TotalperYear_scenI
+ggsave("Graph_TotalperYear_scenI.png", plot = last_plot())
 
-  
 
 All.data.DenI.table = All.data.DenI %>% 
   group_by(sexe, Type, year, age_grp) %>%
@@ -812,10 +831,80 @@ Graph_YearlyAvg_scenI =  ggplot() +
   geom_line(data = subset(All.data.DenI.table, Type %in% c("walking") & sexe %in% c("Female")),
             aes(x = age_grp, y = Avr_per_year, group = sexe, color = "Den I - Walking - Female")) +
   labs(color = "") +
-   ylab("Yearly average of premature deaths avoided") +
+  ylab("Yearly average of premature deaths avoided") +
   xlab("Age") +
-  theme_minimal()+
-    theme(axis.text.x = element_text(angle = 45))
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45))
+
+Graph_YearlyAvg_scenI
+ggsave("Graph_YearlyAvg_scenI.png", plot = last_plot())
+```
+
+
+```{r}
+p1 = All.data.DenI %>% 
+  ggplot() + 
+  geom_line(data = subset(All.data.DenI, Type %in% c("walking") & sexe %in% c("Female")),
+            aes(x = year,y = -HEAT,group = age_grp, color = age_grp ))+
+  theme_minimal() +
+  theme(axis.text.x = element_blank())+
+  ylab("Premature deaths avoided") +
+  xlab("")+
+  labs(title = "Women - Walking")+ 
+  theme(legend.position="none") +
+  ylim(0, 4500)
+
+p2 = All.data.DenI %>% 
+  ggplot() + 
+  geom_line(data = subset(All.data.DenI, Type %in% c("walking") & sexe %in% c("Male")),
+            aes(x = year,y = -HEAT,group = age_grp, color = age_grp ))+
+  theme_minimal() +
+  theme(axis.text.x = element_blank())+
+  ylab("") +
+  xlab("")+
+  labs(title = "Men - Walking")+ 
+  theme(legend.position="none") +
+  ylim(0, 4500)
+
+p3 = All.data.DenI %>% 
+  ggplot() + 
+  geom_line(data = subset(All.data.DenI, Type %in% c("cycling") & sexe %in% c("Female")),
+            aes(x = year,y = -HEAT,group = age_grp, color = age_grp ))+
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, size=4))+
+  ylab("Premature deaths avoided") +
+  xlab("")+
+  labs(title = "Women - Cycling")+ 
+  theme(legend.position="none") +
+  ylim(0, 4500)
+
+p4 = All.data.DenI %>% 
+  ggplot() + 
+  geom_line(data = subset(All.data.DenI, Type %in% c("cycling") & sexe %in% c("Male")),
+            aes(x = year,y = -HEAT,group = age_grp, color = age_grp ))+
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, size=4))+
+  ylab("") +
+  xlab("")+
+  labs(title = "Men - Cycling") +
+  ylim(0, 4500)+ 
+  theme(legend.text = element_text( size = 8), 
+        legend.spacing.y = unit(0.1, 'cm'))
+p4
+
+legend <- get_legend(p4) 
+
+p4 = p4 + theme(legend.position="none")
+
+  
+blankPlot <- ggplot()+geom_blank(aes(1,1)) + 
+  cowplot::theme_nothing()
+
+Premature.deaths.graph = grid.arrange(p1, p2,  p3,p4,legend,
+             layout_matrix=rbind(c(1,1,2,2,5), c(3,3,4,4,5)))
+Premature.deaths.graph
+ggsave("Premature.deaths.graph.png", plot = Premature.deaths.graph)
+
 ```
 
 
