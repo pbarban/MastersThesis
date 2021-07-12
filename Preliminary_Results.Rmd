@@ -45,11 +45,6 @@ junk <- lapply(want, library, character.only = T)
 # Remove the objects we created
 rm(have, want, junk)
 
-devtools::install_github('thomasp85/gganimate')
-#library(gganimate)
-
-devtools::install_github("r-rust/gifski")
-#library(gifski)
 
 ```
 
@@ -115,7 +110,7 @@ ggplot() +
   geom_line(aes(x = Year, y = value, group = Type, color = Type), size = 1)+
   ylab("") +
   xlab("") +
-  labs(title = "négaWatt scenario", subtitle = "In km/inhab/year") +
+  labs(title = "Scenario négaWatt", subtitle = "En km.voyageur") +
   theme_minimal() +
   theme(plot.title = element_text(face = "bold", size = 16),
         plot.subtitle = element_text(colour = "#595a5c", size = 12),
@@ -123,14 +118,13 @@ ggplot() +
         legend.text = element_text( size = 10),
         legend.position="top",
         axis.text=element_text(size=10))
+
+p1 
+
+ggsave("negawatt.graph.png", plot = p1)
+                        
 ```
 
-
-
-```{r}
-p1
-
-```
 
 # Demography Projection
 
@@ -180,74 +174,7 @@ Pop.proj.cat = Pop.proj %>%
 
 saveRDS(Pop.proj.cat, "Data/Pop.proj.rds")
 
-PopPyramid <- Pop.proj.cat %>% 
-  group_by(sexe, year, age_grp, order) %>% 
-  summarise(Pop = sum(Pop))%>% 
-  mutate(Pop = ifelse(sexe == 'Female', as.integer(Pop * -1), as.integer(Pop)),
-         sexe = as.factor(sexe)) %>% 
- ggplot(aes(x = fct_reorder(age_grp, order),
-            y = Pop/1000,
-            fill = sexe)) +
- geom_bar(stat = "identity") +
- scale_fill_manual(values = c("#ee7989" ,"#4682b4")) + 
- coord_flip() + 
- facet_share(~ sexe,
-             dir = "h",
-             scales = "free",
-             reverse_num = TRUE)
-
-PopPyramid <-  PopPyramid +
-  theme(panel.background = element_blank(),
-       panel.border = element_blank(),
-          panel.grid.major = element_blank(),
-          panel.grid.minor = element_blank(),
-       strip.background = element_blank(),
-       strip.text.x = element_blank(),
-        axis.title.y = element_blank(),
-              legend.title = element_blank(),
-       axis.text = element_text(size = 14),
-        axis.text.x=element_blank(),
-        axis.ticks.x=element_blank(),
-       legend.key.size = unit(0.75, "cm"),
-       legend.text = element_text(size = 15,face = "bold"),
-       plot.title = element_text(size = 22,hjust = 0.5,face = "bold"),
-       plot.subtitle = element_text(size = 14, hjust = 0.5,face = "bold"),
-       axis.title.x = element_text(size = 12,face = "bold"),
-       plot.caption = element_text(size = 12, hjust = 0.5,face = "italic",color = "gray"))
-
-
-PopPyramid <- PopPyramid + 
- labs(
-      title = "France Population Projection\nEstimate from 2007 to 2050\n\n{closest_state}",
-      subtitle = "\n\nAge Group",
-      y = "\n\nPopulation (in thousands)",
-      caption = "\n\nData Source: www.insee.fr/fr/statistiques"
-     )
-
-
-#PopPyramid <- PopPyramid + 
- # transition_states(year,
-    #                transition_length = 1,
-    #                state_length = 1) + 
-  #enter_fade() +
-  #exit_fade() + 
-  #ease_aes('cubic-in-out')
-
 ```
-
-
-```{r, echo = FALSE, warning = FALSE,message  = FALSE, eval = TRUE}
-
-#animate(PopPyramid,
-      #  fps = 24,
-      #  duration = 20,
-      #  width = 500,
-       # height = 500,
-       # renderer = gifski_renderer("PopPyramid.gif"))
-```
-
-As shown by the graph above, we understand that the population will be older and the number of eldery will increase over the years.
-
 ## Mortality rate
 ```{r, results='hide'}
 
@@ -286,79 +213,61 @@ Mortality.rate = Mortality.rate %>%
 
 Pop.proj = Pop.proj %>% 
   merge(Mortality.rate, by = c("age", "sexe", "year")) %>% 
-  mutate(Mortality.rate = Deaths/Pop)
+  mutate(Mortality.rate = Deaths/Pop) %>% 
+  mutate(age_grp.FACTOR = cut( age, breaks = seq(0,150, by = 5), include.lowest = T, right = F),
+         age_grp = as.character(age_grp.FACTOR), 
+         age_grp = gsub("\\[|\\]|\\(|\\)", "", age_grp),
+         age_grp = gsub(",", "-", age_grp),
+         post = sub(".*-","",age_grp),
+         age_grp = sub("-.*", "", age_grp),
+         age_grp = paste0(age_grp,"-", as.numeric(post)-1),
+         order = as.numeric(substr(age_grp,1,regexpr("-",age_grp)-1))) 
+
+p1 = Pop.proj %>% 
+  group_by(age_grp, year) %>% 
+  filter(sexe == "Female") %>% 
+  summarise(Mortality.rate = mean(Mortality.rate)) %>% 
+  ggplot() + geom_line(aes(x = year, y = Mortality.rate, group = age_grp , color = age_grp))+
+  theme_minimal() +
+  theme(axis.text.x = element_blank())+
+  ylab("Mortality rate") +
+  xlab("")+
+  labs(title = "Women")+ 
+  ylim(0, 5.5)
+
+p2 = Pop.proj %>% 
+  group_by(age_grp, year) %>% 
+  filter(sexe == "Male") %>% 
+  summarise(Mortality.rate = mean(Mortality.rate)) %>% 
+  ggplot() + geom_line(aes(x = year, y = Mortality.rate, group = age_grp , color = age_grp)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, size=8))+
+  ylab("Mortality rate") +
+  xlab("")+
+  labs(title = "Men") + 
+  ylim(0, 5.5) + 
+  theme(legend.position="none")
+p2
+
+legend <- get_legend(p1) 
+
+p1 = p1 + theme(legend.position="none")
+
+  
+blankPlot <- ggplot() + geom_blank(aes(1,1)) + 
+  cowplot::theme_nothing()
+
+Mortality.rate.graph = grid.arrange(p1, legend, p2, ncol = 2, widths=c(2.3, 0.8))
+
+ggsave("Mortality.rate.graph.png", plot = Mortality.rate.graph)
+
+
+
 
 saveRDS(Pop.proj,"Pop.proj.rds")
 
 ```
 
-
-### Visualization
-
-
-```{r, message=FALSE, warning=FALSE, results='hide'}
-
-Mortality.rate.plot <- Pop.proj %>% 
-  filter(age < 100)
-
-Mortality.rate.plot <-  ggplot(subset(Mortality.rate.plot, sexe %in% "Male"), 
-       aes(x = age,
-           y = Mortality.rate,
-           group = sexe,
-           fill = sexe)) +
-  geom_col(stat = 'identity',
-           alpha = 0.4) +
-   geom_col(data = subset(Mortality.rate.plot, sexe %in% "Female"), 
-            aes(x = age,
-           y = Mortality.rate,
-           group = sexe,
-           fill = sexe,
-           stat = 'identity'),
-           alpha = 0.4) +
-   scale_fill_manual(values = c("#E7B800", "#00AFBB")) +
-  scale_color_manual(values = c("#E7B800", "#00AFBB"))+
-  theme_minimal() +
-  ylab("") +
-  xlab("age") +
-  theme(legend.position="top")
-
-Mortality.rate.plot <- Mortality.rate.plot + 
- labs(
-      title = "Mortality Rate Projection\nin France\n\n{closest_state}",
-      caption = "\n\nData Source: www.insee.fr"
-     )
-
-Mortality.rate.plot <- Mortality.rate.plot +
-  theme(axis.text = element_text(size = 14),
-        axis.ticks.x=element_blank(),
-       legend.key.size = unit(0.75, "cm"),
-       legend.text = element_text(size = 15,face = "bold"),
-       legend.title = element_blank(),
-       plot.title = element_text(size = 22,hjust = 0.5,face = "bold"),
-       plot.subtitle = element_text(size = 14, hjust = 0.5,face = "bold"),
-       axis.title.x = element_text(size = 12,face = "bold"),
-       plot.caption = element_text(size = 12, hjust = 0.5,face = "italic",color = "gray"))
-
-#Mortality.rate.plot <- Mortality.rate.plot + 
- # transition_states(year,
- #                   transition_length = 0.25,
- #                   state_length = 0.25) + 
- # enter_fade() +
- # exit_fade() + 
- # ease_aes('cubic-in-out')
-
-```
-
-
-
-```{r, echo =FALSE}
-#animate(Mortality.rate.plot,
-       # fps = 24,
-       # duration = 30,
-       # width = 500,
-       # height = 500,
-      # renderer = gifski_renderer("Mortality.rate.plot.gif"))
-```
 
 # French distribution of total walking and cyling mileage
 
@@ -451,48 +360,64 @@ Dpl.data.active =  Dpl.data %>%
 p1 = Dpl.data.active %>% 
   filter(Mode == "Cycling") %>%
   ggplot() + 
-  geom_bar(aes(x = as.factor(sexe), y = freq, fill = as.factor(sexe) ), stat="identity") +
+  geom_bar(aes(x = as.factor(sexe), y = freq, fill = as.factor(sexe)),
+           stat="identity",
+           alpha = 0.9) +
   facet_wrap(~ fct_reorder(age_grp, order), nrow = 1) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800"),
+                    labels = c("Hommes", "Femmes")) +
   ylab("") +
   xlab("") +
   labs(title = "Vélo") +
   theme(legend.title = element_blank(),
-        legend.position = "top")+ 
-  scale_fill_discrete( labels = c("Hommes", "Femmes"))+
-  scale_y_continuous(limits = c(0,0.11), expand = c(0, 0))+ 
+        legend.position = "top",
+        strip.text = element_text(size=5))+ 
+  scale_y_continuous(limits = c(0,0.11),
+                     expand = c(0, 0),
+                     labels  = function(x) paste0(x*100, "%"),name="")+ 
   theme(axis.ticks.x = element_blank(),
-        axis.text.x = element_blank())
-```
-
-
-```{r, echo=FALSE}
+        axis.text.x = element_blank()) + 
+  theme(legend.position="none")
 p1
-
 ```
+
+
+
 
 
 ### Walking
 
 ```{r, echo = FALSE}
-p2 = Dpl.data.active %>% filter(Mode == "Walking") %>%
+p2 =Dpl.data.active %>% 
+  filter(Mode == "Walking") %>%
   ggplot() + 
-  geom_bar(aes(x = as.factor(sexe), y =freq, fill =as.factor(sexe) ), stat="identity") +
+  geom_bar(aes(x = as.factor(sexe), y = freq, fill = as.factor(sexe)),
+           stat="identity",
+           alpha = 0.9) +
   facet_wrap(~ fct_reorder(age_grp, order), nrow = 1) +
+  scale_fill_manual(values = c("#00AFBB", "#E7B800"),
+                    labels = c("Hommes", "Femmes")) +
   ylab("") +
   xlab("") +
   labs(title = "Marche") +
   theme(legend.title = element_blank(),
-        legend.position = "top")+ 
-  scale_fill_discrete( labels = c("Hommes", "Femmes")) +
-  scale_y_continuous(limits = c(0,0.08), expand = c(0, 0))+ 
+        legend.position = "top",
+        strip.text = element_text(size=5))+ 
+  scale_y_continuous(limits = c(0,0.06),
+                     expand = c(0, 0),
+                     labels  = function(x) paste0(x*100, "%"),name="")+ 
   theme(axis.ticks.x = element_blank(),
         axis.text.x = element_blank())
-
-```
-
-
-```{r, echo=FALSE}
 p2
+
+legend = get_legend(p2)
+
+p2 = p2 + theme(legend.position="none")
+
+Distribution.France = grid.arrange(legend, p1,p2, nrow = 3, heights = c(0.5,2,2))
+
+ggsave("Distribution.France.png", plot = Distribution.France)
+
 
 ```
 
@@ -542,37 +467,49 @@ saveRDS(Data.Denmark.distribution, "Data.Denmark.distribution.rds")
 ```{r, echo=FALSE}
 p1 = Data.Denmark.distribution %>%
   filter(type != "Walking" & Period == 2) %>%
-  ggplot() + geom_bar(aes(x = Sexe, y = freq, fill = Sexe), stat = "identity") +
+  ggplot() + geom_bar(aes(x = Sexe, y = freq, fill = Sexe), stat = "identity", alpha = 0.9) +
   facet_wrap(~age_grp, nrow = 1) +
   ylab("") +
   xlab("") +
   labs(title = "Vélo") +
   theme(legend.title = element_blank(),
-        legend.position = "top")+ 
-  scale_fill_discrete( labels = c("Femmes", "Hommes"))+
-  scale_y_continuous(limits = c(0,0.06), expand = c(0, 0))+ 
+        legend.position = "top")+
+  scale_fill_manual(values = c("#E7B800", "#00AFBB"),
+                    labels = c("Femmes", "Hommes")) +
+  scale_y_continuous(limits = c(0,0.06), expand = c(0, 0),
+                     labels  = function(x) paste0(x*100, "%"),name="")+ 
   theme(axis.ticks.x = element_blank(),
-        axis.text.x = element_blank())
+        axis.text.x = element_blank())+ theme(legend.position="none")
 p1
 ```
 
 #### walking
 
 ```{r, echo=FALSE}
-p1 = Data.Denmark.distribution %>%
+p2 = Data.Denmark.distribution %>%
   filter(type == "Walking" & Period == 2) %>%
-  ggplot() + geom_bar(aes(x = Sexe, y = freq, fill = Sexe), stat = "identity") +
+  ggplot() + geom_bar(aes(x = Sexe, y = freq, fill = Sexe), stat = "identity", alpha = 0.9) +
   facet_wrap(~age_grp, nrow = 1) +
   ylab("") +
   xlab("") +
-  labs(title = "Vélo") +
+  labs(title = "Marche") +
   theme(legend.title = element_blank(),
-        legend.position = "top")+ 
-  scale_fill_discrete( labels = c("Femmes", "Hommes"))+
-  scale_y_continuous(limits = c(0,0.06), expand = c(0, 0))+ 
+        legend.position = "top")+
+  scale_fill_manual(values = c("#E7B800", "#00AFBB"),
+                    labels = c("Femmes", "Hommes")) +
+  scale_y_continuous(limits = c(0,0.06), expand = c(0, 0),
+                     labels  = function(x) paste0(x*100, "%"),name="")+ 
   theme(axis.ticks.x = element_blank(),
         axis.text.x = element_blank())
-p1
+p2
+
+legend = get_legend(p2)
+
+p2 = p2 + theme(legend.position="none")
+
+Distribution.Denmark = grid.arrange(legend, p1,p2, nrow = 3, heights = c(0.5,2,2))
+
+ggsave("Distribution.Denmark.png", plot = Distribution.Denmark)
 ```
 
 # Evolution of distribution 
@@ -617,6 +554,66 @@ Scenario.DenI %>%
   group_by(Year, Type) %>% 
   summarise(sum(Hypo))
 
+ p1 = ggplot() + 
+  geom_line(data = subset(Scenario.DenI,Type %in% c("Total_Cycling")& Sexe %in% c("Female")),
+            aes(x = Year,y = Hypo, group = age_grp ,color = age_grp)) +
+   scale_y_continuous(labels  = function(x) paste0(x*100, "%"),name="",
+                      sec.axis = dup_axis())+
+   scale_x_continuous(expand = c(0, 0)) +
+  theme_minimal() +
+  xlab("")+
+  labs(title = "Women - Cycling") +
+   theme(legend.position="none")
+ 
+  p2 = ggplot() + 
+  geom_line(data = subset(Scenario.DenI,Type %in% c("Walking")& Sexe %in% c("Female")),
+            aes(x = Year,y = Hypo, group = age_grp ,color = age_grp)) +
+   scale_y_continuous(labels  = function(x) paste0(x*100, "%"),name="",
+                      sec.axis = dup_axis())+
+   scale_x_continuous(expand = c(0, 0)) +
+  theme_minimal() +
+  xlab("")+
+  labs(title = "Women - Walking") + 
+    theme(legend.position="none")
+   
+  p3 = ggplot() + 
+  geom_line(data = subset(Scenario.DenI,Type %in% c("Total_Cycling")& Sexe %in% c("Male")),
+            aes(x = Year,y = Hypo, group = age_grp ,color = age_grp)) +
+   scale_y_continuous(labels  = function(x) paste0(x*100, "%"),name="",
+                      sec.axis = dup_axis())+
+   scale_x_continuous(expand = c(0, 0)) +
+  theme_minimal() +
+  xlab("")+
+  labs(title = "Men - Cycling") + 
+    theme(legend.position="none")
+ 
+  p4 = ggplot() + 
+  geom_line(data = subset(Scenario.DenI,Type %in% c("Walking")& Sexe %in% c("Male")),
+            aes(x = Year,y = Hypo, group = age_grp ,color = age_grp)) +
+   scale_y_continuous(labels  = function(x) paste0(x*100, "%"),name="",
+                      sec.axis = dup_axis())+
+   scale_x_continuous(expand = c(0, 0)) +
+  theme_minimal() +
+  xlab("")+
+  labs(title = "Men - Walking") 
+ 
+ 
+ p4
+
+legend <- get_legend(p4) 
+
+p4 = p4 + theme(legend.position="none")
+
+  
+blankPlot <- ggplot() + geom_blank(aes(1,1)) + 
+  cowplot::theme_nothing()
+
+distribution.graph = grid.arrange(p1, p2,  p3,p4,legend,
+             layout_matrix=rbind(c(1,1,2,2,5), c(3,3,4,4,5)))
+distribution.graph
+ggsave("distribution.graph.png", plot = distribution.graph)
+                        
+      
 ```
 
 ## Pojection {.tabset}
@@ -658,6 +655,9 @@ Scenario.DenI %>%
   ylab("") +
   theme_minimal()+
   theme(legend.position="right")
+
+
+
 
 ```
 
@@ -711,8 +711,6 @@ HEAT_country <- function(type = NULL,
                          RR = NULL,
                          Mortality_Rate) {
   
-  if (!type %in% c('cycling', 'walking')) {
-    stop('"type" must be one of "cycling" or "walking"')}
 
   #Data of reference
   if(type == "cycling") {
@@ -732,23 +730,6 @@ HEAT_country <- function(type = NULL,
     RR <- 0.89
   }
   
-  #Conversion
-  if(units =="minutes/week"){
-    volume <- volume #ask Kevin about the 52.5
-  }
-  
-  if(units =="kms/week"){
-    volume <- ((volume/speed)*60) 
-  }
-  
-  if(units =="minutes/year"){
-    volume <- volume/52.5 
-  }
-  
-  if(units =="kms/year"){
-    volume <- ((volume/speed)*60)/52.5 
-  }
-
   
   #Equation
       Ratio_cycling <- volume/Ref_volume
@@ -897,13 +878,25 @@ legend <- get_legend(p4)
 p4 = p4 + theme(legend.position="none")
 
   
-blankPlot <- ggplot()+geom_blank(aes(1,1)) + 
+blankPlot <- ggplot() + geom_blank(aes(1,1)) + 
   cowplot::theme_nothing()
 
 Premature.deaths.graph = grid.arrange(p1, p2,  p3,p4,legend,
              layout_matrix=rbind(c(1,1,2,2,5), c(3,3,4,4,5)))
 Premature.deaths.graph
 ggsave("Premature.deaths.graph.png", plot = Premature.deaths.graph)
+
+All.data.DenI %>% 
+  group_by(year) %>% 
+  summarise(HEAT = sum(-HEAT)) %>% 
+  ungroup() %>% 
+  summarise(HEAT = mean(HEAT))
+
+Max = All.data.DenI %>% 
+  group_by(year) %>% 
+  summarise(HEAT = sum(-HEAT)) 
+  
+  
 
 ```
 
