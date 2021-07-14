@@ -223,30 +223,38 @@ Pop.proj = Pop.proj %>%
          age_grp = paste0(age_grp,"-", as.numeric(post)-1),
          order = as.numeric(substr(age_grp,1,regexpr("-",age_grp)-1))) 
 
-p1 = Pop.proj %>% 
-  group_by(age_grp, year) %>% 
-  filter(sexe == "Female") %>% 
-  summarise(Mortality.rate = mean(Mortality.rate)) %>% 
-  ggplot() + geom_line(aes(x = year, y = Mortality.rate, group = age_grp , color = age_grp))+
+p1 =  Pop.proj %>% 
+  ggplot() + 
+  geom_line(data = subset(Pop.proj,
+                          sexe %in% c("Female") &
+                          year %in% c(2020,2030,2049)&
+                          age < 84),
+            aes(x = age,
+                y = Mortality.rate,
+                group = year,
+                color = year))+
+  scale_y_continuous(labels  = function(x) paste0(x*100, "%"))+
   theme_minimal() +
-  theme(axis.text.x = element_blank())+
   ylab("Mortality rate") +
-  xlab("")+
-  labs(title = "Women")+ 
-  ylim(0, 5.5)
+  xlab("Age")+
+  labs(title = "Women")
+p1
 
-p2 = Pop.proj %>% 
-  group_by(age_grp, year) %>% 
-  filter(sexe == "Male") %>% 
-  summarise(Mortality.rate = mean(Mortality.rate)) %>% 
-  ggplot() + geom_line(aes(x = year, y = Mortality.rate, group = age_grp , color = age_grp)) +
+p2 =  Pop.proj %>% 
+  ggplot() + 
+  geom_line(data = subset(Pop.proj,
+                          sexe %in% c("Male") &
+                          year %in% c(2020,2030,2049)&
+                          age < 84),
+            aes(x = age,
+                y = Mortality.rate,
+                group = year,
+                color = year))+
+  scale_y_continuous(labels  = function(x) paste0(x*100, "%"))+
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90, size=8))+
   ylab("Mortality rate") +
-  xlab("")+
-  labs(title = "Men") + 
-  ylim(0, 5.5) + 
-  theme(legend.position="none")
+  xlab("Age")+
+  labs(title = "Men")+ theme(legend.position="none")
 p2
 
 legend <- get_legend(p1) 
@@ -332,6 +340,7 @@ ggplot(dw$variables) +
 
 Dpl.data.active =  Dpl.data %>% 
   filter(v2_mtp ==1.10 | v2_mtp == 2.2) %>% 
+  filter(age >= 10 & age <= 84) %>% #J'enleve ici les ages < 10 ans et > 84 ans
   mutate(age_grp.FACTOR = cut( age, breaks = seq(0,150, by = 5), include.lowest = T, right = F),
          age_grp = as.character(age_grp.FACTOR), 
          age_grp = gsub("\\[|\\]|\\(|\\)", "", age_grp),
@@ -372,7 +381,7 @@ p1 = Dpl.data.active %>%
   theme(legend.title = element_blank(),
         legend.position = "top",
         strip.text = element_text(size=5))+ 
-  scale_y_continuous(limits = c(0,0.11),
+  scale_y_continuous(limits = c(0,0.14),
                      expand = c(0, 0),
                      labels  = function(x) paste0(x*100, "%"),name="")+ 
   theme(axis.ticks.x = element_blank(),
@@ -730,7 +739,6 @@ HEAT_country <- function(type = NULL,
     RR <- 0.89
   }
   
-  
   #Equation
       Ratio_cycling <- volume/Ref_volume
         Reduction_mortality_rate <- (1-RR)*Ratio_cycling
@@ -770,6 +778,19 @@ All.data.DenI = Pop.proj %>%
              volume = volume,
              Population = Pop,
              Mortality_Rate = Mortality.rate))
+
+#Test avec les données de Gao2017
+
+Example_Date = read.delim("Example_Data_Gao2017.csv", sep = ",") %>% 
+  mutate(Population_size = as.numeric(gsub(",", "", Population_size)),
+         Average_annual_mortality_rate_per_100000_population = as.numeric(gsub(",", "", Average_annual_mortality_rate_per_100000_population)),
+        Type = "walking",
+         HEAT = HEAT_country(type = Type,
+             volume = Average_weekly_minutes_of_walking,
+             Population = Population_size,
+             Mortality_Rate = Average_annual_mortality_rate_per_100000_population/100000))
+  
+  
 ```
 
 
