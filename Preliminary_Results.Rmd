@@ -774,23 +774,112 @@ All.data.DenI = Pop.proj %>%
                           ((Adjusted.distri/14)*60)/52.5,
                           ((Adjusted.distri/4.8)*60)/52.5),
          volume = volume/Pop,
+         RR = ifelse(Type == "cycling", 0.9,0.89),
+         MR = Mortality.rate * 100000,
+         Ratio_cycling = ifelse(Type == "cycling", volume/100, volume/169),
+         Reduction_mortality_rate = (1-RR)*Ratio_cycling*100,
          HEAT = HEAT_country(type = Type,
              volume = volume,
              Population = Pop,
              Mortality_Rate = Mortality.rate))
 
+ p1 = ggplot() + geom_bar(data = subset(All.data.DenI, year == 2020),
+                      aes(x = age_grp,
+                          y = -HEAT,
+                          group = Type, 
+                          fill = Type),
+                      stat="identity",
+                      position=position_dodge() ) +
+    geom_line(data = subset(All.data.DenI, year == 2020 ),
+                      aes(x = age_grp,
+                          y = Mortality.rate * 100000,
+                          group = sexe,
+                          linetype=sexe),
+              alpha = .75,
+               stat="identity") + 
+   scale_y_continuous(sec.axis = dup_axis(name = ""))+
+   theme_minimal() +
+  xlab("")+
+   ylab("Décès évités")+
+  labs(title = "2020",
+       linetype = "Taux de mortalité pour 100000:",
+       fill = "Mode:")+
+   theme(legend.position = "bottom")+ theme(legend.position="none")
+ 
+  p2 = ggplot() + geom_bar(data = subset(All.data.DenI, year == 2030),
+                      aes(x = age_grp,
+                          y = -HEAT,
+                          group = Type, 
+                          fill = Type),
+                      stat="identity",
+                      position=position_dodge() ) +
+    geom_line(data = subset(All.data.DenI, year == 2030 ),
+                      aes(x = age_grp,
+                          y = Mortality.rate * 100000,
+                          group = sexe,
+                          linetype=sexe),
+              alpha = .75,
+               stat="identity") + 
+   scale_y_continuous(sec.axis = dup_axis(name = ""))+
+   theme_minimal() +
+  xlab("")+
+   ylab("Décès évités")+
+  labs(title = "2030",
+       linetype = "Taux de mortalité pour 100000:",
+       fill = "Mode:")+
+   theme(legend.position = "bottom")+ theme(legend.position="none")
+   
+   p3 = ggplot() + geom_bar(data = subset(All.data.DenI, year == 2049),
+                      aes(x = age_grp,
+                          y = -HEAT,
+                          group = Type, 
+                          fill = Type),
+                      stat="identity",
+                      position=position_dodge() ) +
+    geom_line(data = subset(All.data.DenI, year == 2049 ),
+                      aes(x = age_grp,
+                          y = Mortality.rate * 100000,
+                          group = sexe,
+                          linetype=sexe),
+              alpha = .75,
+               stat="identity") + 
+   scale_y_continuous(sec.axis = dup_axis(name = ""))+
+   theme_minimal() +
+  xlab("")+
+   ylab("Décès évités")+
+  labs(title = "2049",
+       linetype = "Taux de mortalité pour 100000:",
+       fill = "Mode:")+
+   theme(legend.position = "bottom")
+
+
+legend <- get_legend(p3) 
+
+p3 = p3 + theme(legend.position="none")
+
+  
+blankPlot <- ggplot() + geom_blank(aes(1,1)) + 
+  cowplot::theme_nothing()
+
+Deces.evites.graph = grid.arrange(p1, p2,  p3,legend,ncol = 1,heights=c(2,2,2,1))
+    Deces.evites
+ggsave("Deces.evites.png", plot = Deces.evites.graph)
+
+
 #Test avec les données de Gao2017
 
 Example_Date = read.delim("Example_Data_Gao2017.csv", sep = ",") %>% 
   mutate(Population_size = as.numeric(gsub(",", "", Population_size)),
-         Average_annual_mortality_rate_per_100000_population = as.numeric(gsub(",", "", Average_annual_mortality_rate_per_100000_population)),
+         Average_annual_mortality_rate_per_100000_population = as.numeric(gsub(",", "", Average_annual_mortality_rate_per_100000_population))/100000,
+         MR = Average_annual_mortality_rate_per_100000_population *100000,
         Type = "walking",
-         HEAT = HEAT_country(type = Type,
+        HEAT = HEAT_country(type = Type,
              volume = Average_weekly_minutes_of_walking,
              Population = Population_size,
-             Mortality_Rate = Average_annual_mortality_rate_per_100000_population/100000))
+             Mortality_Rate = Average_annual_mortality_rate_per_100000_population))
   
-  
+
+          
 ```
 
 
