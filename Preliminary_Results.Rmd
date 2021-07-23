@@ -464,6 +464,12 @@ Data.Denmark = read.csv("Data_Denmark.csv", sep = ";") %>%
 Data.Denmark.distribution = Data.Denmark %>% 
   group_by(type, Period) %>%
   mutate(freq = value/sum(value)) 
+
+Data.Denmark.distribution %>% 
+  group_by(Period, type) %>% 
+  summarise(sum(N))
+
+
 saveRDS(Data.Denmark.distribution, "Data.Denmark.distribution.rds")
 
 ```
@@ -559,9 +565,21 @@ Scenario.DenI = Dpl.data.active %>%
   merge(negaWatt.data, by = c("Year", "Type"))%>%
   mutate(Adjusted.distri = Hypo * value)
 
-Scenario.DenI %>% 
-  group_by(Year, Type) %>% 
-  summarise(sum(Hypo))
+Scenario.Full.Den = Data.Denmark.distribution %>% 
+  filter(Period == 2) %>%
+  select(age_grp, type, Sexe, freq) %>%
+  group_by(age_grp, type, Sexe, freq) %>%
+  slice(rep(1:n(), each = 42))%>%
+  mutate(Year = row_number(),
+         Year = 2008 - 1 + Year) %>%
+  merge(negaWatt.data,
+        by.x = c("Year", "type"),
+        by.y = c("Year", "Type")) %>%
+  mutate(Adjusted.distri = freq * value)
+        
+Scenario.Full.Den %>% 
+  group_by(Year, type) %>% 
+  summarise(sum(freq))
 
  p1 = ggplot() + 
   geom_line(data = subset(Scenario.DenI,Type %in% c("Total_Cycling")& Sexe %in% c("Female")),
@@ -769,6 +787,7 @@ All.data.DenI = Pop.proj %>%
   summarise(Pop = sum(Pop),
             Mortality.rate = mean(Mortality.rate)) %>%
   select(sexe, age_grp, year, Mortality.rate, Pop, Type, Adjusted.distri) %>% 
+  group_by(Type, sexe, age_grp) %>% 
   mutate(Type = ifelse(Type == "Total_Cycling", "cycling", "walking"),
          volume = ifelse(Type == "cycling",
                           ((Adjusted.distri/14)*60)/52.5,
@@ -778,14 +797,71 @@ All.data.DenI = Pop.proj %>%
          MR = Mortality.rate * 100000,
          Ratio_cycling = ifelse(Type == "cycling", volume/100, volume/169),
          Reduction_mortality_rate = (1-RR)*Ratio_cycling*100,
-         HEAT = HEAT_country(type = Type,
+         Volume.const = first(volume),
+         Pop.const = first(Pop),
+         MR.const = first(Mortality.rate),
+         HEAT.nw = HEAT_country(type = Type,
              volume = volume,
              Population = Pop,
-             Mortality_Rate = Mortality.rate))
+             Mortality_Rate = Mortality.rate),
+         HEAT.bsl = HEAT_country(type = Type,
+             volume = Volume.const,
+             Population = Pop,
+             Mortality_Rate = Mortality.rate),
+         HEAT = -HEAT.nw - (-HEAT.bsl))
+
+All.data.Full.Den = Pop.proj %>% 
+  mutate(age_grp.FACTOR = cut( age, breaks = seq(0,150, by = 5), include.lowest = T, right = F),
+         age_grp = as.character(age_grp.FACTOR), 
+         age_grp = gsub("\\[|\\]|\\(|\\)", "", age_grp),
+         age_grp = gsub(",", "-", age_grp),
+         post = sub(".*-","",age_grp),
+         age_grp = sub("-.*", "", age_grp),
+         age_grp = paste0(age_grp,"-", as.numeric(post)-1),
+         order = as.numeric(substr(age_grp,1,regexpr("-",age_grp)-1)))%>%
+  merge(Scenario.Full.Den,
+        by.x = c("sexe", "age_grp", "year"),
+        by.y = c("Sexe", "age_grp", "Year")) %>% 
+  group_by(sexe, age_grp, year, type, Adjusted.distri ) %>% 
+  summarise(Pop = sum(Pop),
+            Mortality.rate = mean(Mortality.rate)) %>% 
+  select(sexe, age_grp, year, Mortality.rate, Pop, type, Adjusted.distri) %>% 
+    group_by(type, sexe, age_grp) %>% 
+  mutate(type = ifelse(type == "Total_Cycling", "cycling", "walking"),
+         volume = ifelse(type == "cycling",
+                          ((Adjusted.distri/14)*60)/(365.25/7),
+                          ((Adjusted.distri/4.8)*60)/(365.25/7))) %>% 
+  mutate(volume = volume/Pop,
+         RR = ifelse(type == "cycling", 0.9,0.89),
+         MR = Mortality.rate * 100000,
+         Ratio_cycling = ifelse(type == "cycling", volume/100, volume/169), ## verifier la bounderie sup
+         Reduction_mortality_rate = (1-RR)*Ratio_cycling*100,
+         Volume.const = first(volume))
+
+,
+         Pop.const = first(Pop),
+         MR.const = first(Mortality.rate),
+         HEAT.nw = HEAT_country(type = type,
+             volume = volume,
+             Population = Pop,
+             Mortality_Rate = Mortality.rate),
+         HEAT.bsl = HEAT_country(type = type,
+             volume = Volume.const,
+             Population = Pop,
+             Mortality_Rate = Mortality.rate),
+         HEAT = -HEAT.nw - (-HEAT.bsl)))
+
+All.data.Full.Den %>% 
+  filter(type == "walking") %>% 
+  ggplot() + geom_point(aes(x = year, y = volume, group = age_grp, color = age_grp))
+
+All.data.Full.Den %>% 
+  ggplot() + geom_point(aes(x = year, y = Pop, group = age_grp, color = age_grp))
+
 
  p1 = ggplot() + geom_bar(data = subset(All.data.DenI, year == 2020),
                       aes(x = age_grp,
-                          y = -HEAT,
+                          y = HEAT,
                           group = Type, 
                           fill = Type),
                       stat="identity",
@@ -808,7 +884,7 @@ All.data.DenI = Pop.proj %>%
  
   p2 = ggplot() + geom_bar(data = subset(All.data.DenI, year == 2030),
                       aes(x = age_grp,
-                          y = -HEAT,
+                          y = HEAT,
                           group = Type, 
                           fill = Type),
                       stat="identity",
@@ -831,7 +907,7 @@ All.data.DenI = Pop.proj %>%
    
    p3 = ggplot() + geom_bar(data = subset(All.data.DenI, year == 2049),
                       aes(x = age_grp,
-                          y = -HEAT,
+                          y = HEAT,
                           group = Type, 
                           fill = Type),
                       stat="identity",
@@ -877,16 +953,66 @@ Example_Date = read.delim("Example_Data_Gao2017.csv", sep = ",") %>%
              volume = Average_weekly_minutes_of_walking,
              Population = Population_size,
              Mortality_Rate = Average_annual_mortality_rate_per_100000_population))
+
+#Constant variables
+All.data.DenI = All.data.DenI %>% 
+  group_by(Type, sexe, age_grp) %>% 
+  mutate(Volume.const = first(volume),
+         Pop.const = first(Pop),
+         MR.const = first(Mortality.rate))
+
+# Effect of pop growth
+All.data.DenI %>% 
+  mutate( HEAT_pop = HEAT_country(type = Type,
+             volume = Volume.const,
+             Population = Pop,
+             Mortality_Rate = MR.const)) %>% 
+  group_by(Type, year) %>% 
+  summarise(HEAT = sum(-HEAT_pop)) %>% 
+  ggplot() + geom_line(aes(x = year, y = HEAT, group = Type , color = Type))+
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Effect of demographic change")
+
+# Effect of mortality rate evolution
+All.data.DenI %>% 
+  mutate( HEAT_MR = HEAT_country(type = Type,
+             volume = Volume.const,
+             Population = Pop.const,
+             Mortality_Rate = Mortality.rate)) %>% 
+  group_by(Type, year) %>% 
+  summarise(HEAT = sum(-HEAT_MR)) %>% 
+  ggplot() + geom_line(aes(x = year, y = HEAT, group = Type , color = Type))+
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Effect of mortality rate evolution")
+
+# Effect of increase in volume
+All.data.DenI %>% 
+  mutate( HEAT_volume = HEAT_country(type = Type,
+             volume = volume,
+             Population = Pop.const,
+             Mortality_Rate = MR.const)) %>% 
+  group_by(Type, year) %>% 
+  summarise(HEAT = sum(-HEAT_volume)) %>% 
+  ggplot() + geom_line(aes(x = year, y = HEAT, group = Type , color = Type))+
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Effect of increase in volume")
   
+  
+
+
+
 
           
 ```
 
 
 ```{r}
-Graph_TotalperYear_scenI = All.data.DenI %>% 
+Graph_TotalperYear_scenI = All.data.DenI%>% 
   group_by(year, Type) %>% 
-  summarise(HEAT = sum(-HEAT)) %>% 
+  summarise(HEAT = sum(HEAT))%>% 
   ggplot() + geom_bar(aes(x= year, y= HEAT, group = Type, fill = Type), stat = "identity")+
    ylab("premature deaths avoided") +
   xlab("") +
@@ -897,9 +1023,36 @@ Graph_TotalperYear_scenI = All.data.DenI %>%
 Graph_TotalperYear_scenI
 ggsave("Graph_TotalperYear_scenI.png", plot = last_plot())
 
+Graph_TotalperYear_Full.Den = All.data.Full.Den %>% 
+  group_by(year, type) %>% 
+  summarise(HEAT = sum(HEAT)) %>% 
+  ggplot() + geom_bar(aes(x= year, y= HEAT, group = type, fill = type), stat = "identity")+
+   ylab("premature deaths avoided") +
+  xlab("") +
+  theme_minimal()+
+  theme(legend.position = "top",
+        axis.text.x = element_text(angle = 90))
+
+Graph_TotalperYear_Full.Den
+
+ggsave("Graph_TotalperYear_Full.Den.png", plot = Graph_TotalperYear_Full.Den)
+
 
 All.data.DenI.table = All.data.DenI %>% 
   group_by(sexe, Type, year, age_grp) %>%
+  mutate(HEAT = - HEAT) %>% 
+  summarise(HEAT = sum(HEAT)) %>% 
+  pivot_wider( names_from = year, values_from = HEAT)%>% 
+  mutate("2015-2020" = rowSums(across("2015":"2020")),
+         "2021-2030" = rowSums(across("2021":"2030")),
+         "2031-2040" = rowSums(across("2031":"2040")),
+         "2041-2049" = rowSums(across("2041":"2049")),
+         "Avr per year" = round(rowMeans(across("2021":"2049"))),
+         "Avr_per_year" = round(rowMeans(across("2021":"2049"))))
+
+
+All.data.Full.Den.table = All.data.Full.Den %>% 
+  group_by(sexe, type, year, age_grp) %>%
   mutate(HEAT = - HEAT) %>% 
   summarise(HEAT = sum(HEAT)) %>% 
   pivot_wider( names_from = year, values_from = HEAT)%>% 
@@ -926,8 +1079,27 @@ Graph_YearlyAvg_scenI =  ggplot() +
   xlab("Age") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45))
-
 Graph_YearlyAvg_scenI
+
+
+Graph_YearlyAvg_Full.Den =  ggplot() + 
+  geom_line(data = subset(All.data.Full.Den.table, type %in% c("cycling") & sexe %in% c("Male")),
+            aes(x = age_grp,y = Avr_per_year,group = sexe,color = "Den I - Cycling - Male")) +
+  geom_line(data = subset(All.data.Full.Den.table, type %in% c("cycling") & sexe %in% c("Female")),
+            aes(x = age_grp,y = Avr_per_year,group = sexe,color = "Den I - Cycling - Female")) +
+  geom_line(data = subset(All.data.Full.Den.table, type %in% c("walking") & sexe %in% c("Male")),
+            aes(x = age_grp,y = Avr_per_year,group = sexe,color = "Den I - Walking - Male")) +
+  geom_line(data = subset(All.data.Full.Den.table, type %in% c("walking") & sexe %in% c("Female")),
+            aes(x = age_grp, y = Avr_per_year, group = sexe, color = "Den I - Walking - Female")) +
+  labs(color = "") +
+  ylab("Yearly average of premature deaths avoided") +
+  xlab("Age") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45))
+Graph_YearlyAvg_Full.Den
+
+
+
 ggsave("Graph_YearlyAvg_scenI.png", plot = last_plot())
 ```
 
